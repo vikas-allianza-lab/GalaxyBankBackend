@@ -33,18 +33,22 @@ public class JwtFilter extends OncePerRequestFilter {
      * stale bearer token on these routes. CORS preflight is also handled before auth.
      */
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest req) {
-        if ("OPTIONS".equalsIgnoreCase(req.getMethod())) {
-            return true;
-        }
-        if (!"GET".equalsIgnoreCase(req.getMethod())) {
-            return false;
-        }
-        String path = req.getServletPath();
-        return path.startsWith("/themes/")
-                || path.equals("/themes")
-                || path.matches("^/banks/[^/]+/theme$");
+protected boolean shouldNotFilter(HttpServletRequest req) {
+
+    if ("OPTIONS".equalsIgnoreCase(req.getMethod())) {
+        return true;
     }
+
+    if (!"GET".equalsIgnoreCase(req.getMethod())) {
+        return false;
+    }
+
+    String path = req.getServletPath();
+
+    return path.startsWith("/themes/")
+            || path.equals("/themes")
+            || path.matches("^/banks/[^/]+/theme$");
+}
 
     @Override
     protected void doFilterInternal(
