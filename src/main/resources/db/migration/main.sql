@@ -1671,6 +1671,173 @@ BEGIN
 END $$;
 
 
+
+
+ALTER TABLE public."MB004002"
+ADD COLUMN IF NOT EXISTS book_type VARCHAR(20),
+ADD COLUMN IF NOT EXISTS no_of_leaves INTEGER;
+
+ALTER TABLE public."MB004002"
+ADD CONSTRAINT chk_cheque_book_type_leaves
+CHECK (
+    (book_type = 'STANDARD' AND no_of_leaves = 25)
+    OR
+    (book_type = 'PREMIUM' AND no_of_leaves = 50)
+);
+
+
+
+
+
+-- MB004002: Cheque Book Request
+
+CREATE TABLE IF NOT EXISTS public."MB004002" (
+    id BIGSERIAL PRIMARY KEY,
+
+    branch_code VARCHAR(20) NOT NULL,
+    customer_no VARCHAR(30) NOT NULL,
+    account_no VARCHAR(30) NOT NULL,
+
+    account_status VARCHAR(20),
+    account_type VARCHAR(20),
+
+    req_status req_status_t NOT NULL DEFAULT 'PENDING',
+
+    noof_books SMALLINT NOT NULL DEFAULT 1
+        CHECK (noof_books > 0),
+
+    book_type VARCHAR(20)
+        CHECK (book_type IN ('STANDARD', 'PREMIUM')),
+
+    no_of_leaves SMALLINT
+        CHECK (no_of_leaves IN (25, 50)),
+
+    delivery VARCHAR(20) NOT NULL
+        CHECK (
+            delivery IN (
+                'BRANCH',
+                'PRIMARY_ADDRESS',
+                'DEFAULT_ADDRESS'
+            )
+        ),
+
+    created_by BIGINT NOT NULL,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    modified_by BIGINT,
+    modified_on TIMESTAMPTZ,
+
+    verified_by BIGINT,
+    verified_on TIMESTAMPTZ,
+
+    CONSTRAINT fk_mb004002_branch
+        FOREIGN KEY (branch_code)
+        REFERENCES public."MB002002"(branch_code)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+
+    CONSTRAINT fk_mb004002_account
+        FOREIGN KEY (account_no, customer_no)
+        REFERENCES public."MB002003"(account_no, customer_no)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+
+    CONSTRAINT fk_mb004002_created
+        FOREIGN KEY (created_by)
+        REFERENCES public."MB001001"(user_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+
+    CONSTRAINT fk_mb004002_modified
+        FOREIGN KEY (modified_by)
+        REFERENCES public."MB001001"(user_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+
+    CONSTRAINT fk_mb004002_verified
+        FOREIGN KEY (verified_by)
+        REFERENCES public."MB001001"(user_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+
+    CONSTRAINT chk_mb004002_maker_checker
+        CHECK (verified_by IS NULL OR verified_by <> created_by),
+
+    CONSTRAINT chk_mb004002_verify_pair
+        CHECK ((verified_by IS NULL) = (verified_on IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_mb004002_customer
+ON public."MB004002" (customer_no, created_on DESC);
+
+CREATE INDEX IF NOT EXISTS idx_mb004002_branch_status
+ON public."MB004002" (branch_code, req_status);
+
+
+
+
+
+
+-- Add cheque book type
+ALTER TABLE public."MB004002"
+ADD COLUMN IF NOT EXISTS book_type VARCHAR(20);
+
+-- Add number of leaves
+ALTER TABLE public."MB004002"
+ADD COLUMN IF NOT EXISTS no_of_leaves SMALLINT;
+
+-- Existing noof_books column remains
+ALTER TABLE public."MB004002"
+ALTER COLUMN noof_books SET DEFAULT 1;
+
+-- Validate book type
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_mb004002_book_type'
+          AND conrelid = 'public."MB004002"'::regclass
+    ) THEN
+        ALTER TABLE public."MB004002"
+        ADD CONSTRAINT chk_mb004002_book_type
+        CHECK (
+            book_type IS NULL
+            OR book_type IN ('STANDARD', 'PREMIUM')
+        );
+    END IF;
+END $$;
+
+-- Validate leaves
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_mb004002_no_of_leaves'
+          AND conrelid = 'public."MB004002"'::regclass
+    ) THEN
+        ALTER TABLE public."MB004002"
+        ADD CONSTRAINT chk_mb004002_no_of_leaves
+        CHECK (
+            no_of_leaves IS NULL
+            OR no_of_leaves IN (25, 50)
+        );
+    END IF;
+END $$;
+
+
+
+select*from public."MB004013";
+
+
+SELECT
+    account_no,
+    customer_no,
+    account_status,
+    account_type,
+    branch_code
+FROM public."MB002003"
+WHERE account_no = '100000000002';
+
+
+
+
 ALTER TABLE "MB004001"
 ADD COLUMN is_sys SMALLINT NOT NULL DEFAULT 1;
 

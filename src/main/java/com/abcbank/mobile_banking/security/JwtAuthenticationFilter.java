@@ -23,6 +23,9 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private final JwtService jwtService;
     private final JdbcTemplate jdbc;
 
@@ -42,47 +45,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String header = request.getHeader("Authorization");
 
-        try {
-            if (header != null
-                    && header.startsWith("Bearer ")
-                    && SecurityContextHolder.getContext()
-                            .getAuthentication() == null) {
+        log.info("JWT DEBUG: Request URL: {}", request.getRequestURI());
 
+        if (header == null || !header.startsWith("Bearer ")) {
+            log.warn("JWT DEBUG: Bearer token missing");
+        }
+
+        if (header != null
+                && header.startsWith("Bearer ")
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+            try {
                 String token = header.substring(7).trim();
 
                 Claims claims = jwtService.parse(token);
 
                 String subject = claims.getSubject();
-                String userType =
-                        claims.get("user_type", String.class);
-                String scope =
-                        claims.get("scope", String.class);
-                String sessionId =
-                        claims.get("sid", String.class);
+                String userType = claims.get("user_type", String.class);
+                String scope = claims.get("scope", String.class);
 
-                boolean activeSession = true;
+                log.info("JWT DEBUG subject: {}", subject);
+                log.info("JWT DEBUG user_type: {}", userType);
+                log.info("JWT DEBUG scope: {}", scope);
 
-                if (sessionId != null && !sessionId.isBlank()) {
-
-                    activeSession = Boolean.TRUE.equals(
-                            jdbc.queryForObject(
-                                    """
-                                    SELECT EXISTS (
-                                        SELECT 1
-                                        FROM public.mobile_auth_sessions
-                                        WHERE session_id = ?
-                                          AND revoked_at IS NULL
-                                          AND expires_at > now()
-                                    )
-                                    """,
-                                    Boolean.class,
-                                    UUID.fromString(sessionId)
-                            )
-                    );
-                }
-
-                if (activeSession
-                        && subject != null
+                if (subject != null
                         && !subject.isBlank()
                         && "CU".equals(userType)) {
 
@@ -93,6 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authorities.add(
                             new SimpleGrantedAuthority("ROLE_CUSTOMER"));
 
+                    // Token scope authorities
                     if ("registration:complete".equals(scope)) {
 
                         authorities.add(
@@ -117,47 +104,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             new UsernamePasswordAuthenticationToken(
                                     subject,
                                     null,
-                                    authorities
-                            );
+                                    authorities);
 
                     SecurityContextHolder.getContext()
                             .setAuthentication(authentication);
+
+                    log.info("JWT DEBUG: Customer authentication accepted");
+                    log.info("JWT DEBUG: Authorities: {}", authorities);
+
+                } else {
+
+                    log.warn(
+                            "JWT DEBUG: Authentication rejected. subject={}, userType={}",
+                            subject,
+                            userType);
                 }
+
+            } catch (JwtException | IllegalArgumentException ex) {
+                SecurityContextHolder.clearContext();
             }
-
-        } catch (JwtException | IllegalArgumentException ex) {
-
-            System.out.println(
-                    "JWT AUTHENTICATION ERROR: " + ex.getMessage());
-
-            SecurityContextHolder.clearContext();
-
-        } catch (Exception ex) {
-
-            System.out.println(
-                    "AUTHENTICATION FILTER ERROR: " + ex.getMessage());
-
-            SecurityContextHolder.clearContext();
         }
-
-        // TEMPORARY DEBUGGING INFORMATION
-        System.out.println("========== JWT DEBUG ==========");
-        System.out.println("REQUEST URI: " + request.getRequestURI());
-        System.out.println("REQUEST METHOD: " + request.getMethod());
-
-        var authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        System.out.println("AUTHENTICATION: " + authentication);
-
-        if (authentication != null) {
-            System.out.println(
-                    "AUTHORITIES: " + authentication.getAuthorities());
-        } else {
-            System.out.println("AUTHORITIES: NONE");
-        }
-
-        System.out.println("===============================");
 
         chain.doFilter(request, response);
     }

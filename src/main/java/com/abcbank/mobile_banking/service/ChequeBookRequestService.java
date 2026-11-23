@@ -96,49 +96,73 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 4. Normalize delivery option
+        // 4. Validate cheque book type
+        String bookType = request.bookType()
+            .trim()
+            .toUpperCase(Locale.ROOT);
+
+        int noOfLeaves;
+
+        if ("STANDARD".equals(bookType)) {
+            noOfLeaves = 25;
+        } else if ("PREMIUM".equals(bookType)) {
+            noOfLeaves = 50;
+        } else {
+            throw new IllegalArgumentException(
+                "Book type must be STANDARD or PREMIUM."
+            );
+        }
+
+        // One cheque book per request
+        int noOfBooks = 1;
+
+        // 5. Normalize delivery option
         String delivery = request.delivery()
                 .trim()
                 .toUpperCase(Locale.ROOT);
 
-        // 5. Insert cheque book request
-        return jdbc.queryForObject("""
-            INSERT INTO public."MB004002" (
-                branch_code,
-                customer_no,
-                account_no,
-                account_status,
-                account_type,
-                noof_leaves,
-                delivery,
-                created_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING
-                id,
-                req_status,
-                account_no,
-                noof_leaves,
-                delivery,
-                created_on
-            """,
-                (rs, rowNum) -> new ChequeBookResponse(
-                        rs.getLong("id"),
-                        rs.getString("req_status"),
-                        rs.getString("account_no"),
-                        rs.getInt("noof_leaves"),
-                        rs.getString("delivery"),
-                        rs.getObject("created_on", OffsetDateTime.class),
-                        "Cheque book request submitted successfully."
-                ),
-                account.get("branch_code"),
-                customerId,
-                account.get("account_no"),
-                account.get("account_status"),
-                account.get("account_type"),
-                request.noofLeaves(),
-                delivery,
-                createdBy
-        );
+        // 6. Insert cheque book request
+       return jdbc.queryForObject("""
+    INSERT INTO public."MB004002" (
+        branch_code,
+        customer_no,
+        account_no,
+        account_status,
+        account_type,
+        book_type,
+        no_of_leaves,
+        delivery,
+        created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING
+        id,
+        req_status,
+        account_no,
+        no_of_leaves,
+        delivery,
+        created_on
+    """,
+
+    (rs, rowNum) -> new ChequeBookResponse(
+        rs.getLong("id"),
+        rs.getString("req_status"),
+        rs.getString("account_no"),
+        rs.getInt("no_of_leaves"),
+        rs.getString("delivery"),
+        rs.getObject("created_on", OffsetDateTime.class),
+        "Cheque book request submitted successfully."
+    ),
+
+    account.get("branch_code"),
+    customerId,
+    account.get("account_no"),
+    account.get("account_status"),
+    account.get("account_type"),
+    bookType,
+    noOfLeaves,
+    delivery,
+    createdBy
+);
     }
 }
