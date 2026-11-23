@@ -1,8 +1,7 @@
+
 package com.abcbank.mobile_banking.controller;
 
 import java.util.Map;
-
-import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.abcbank.mobile_banking.dto.request.LoanLeadRequest;
 import com.abcbank.mobile_banking.service.LoanLeadQueryService;
-import com.abcbank.mobile_banking.service.LoanPaymentService;
 
 import jakarta.validation.Valid;
 
@@ -26,13 +24,9 @@ import jakarta.validation.Valid;
 public class LoanLeadQueryController {
 
     private final LoanLeadQueryService service;
-    private final LoanPaymentService loanPaymentService;
 
-    public LoanLeadQueryController(
-            LoanLeadQueryService service,
-            LoanPaymentService loanPaymentService) {
+    public LoanLeadQueryController(LoanLeadQueryService service) {
         this.service = service;
-        this.loanPaymentService = loanPaymentService;
     }
 
     // Validate logged-in customer
@@ -63,7 +57,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // EMI: Display loan and EMI details for Pay EMI screen
+    // EMI: Display loan and EMI details
     @GetMapping("/emi-details")
     public ResponseEntity<Map<String, Object>> getEmiDetails(
             Authentication authentication) {
@@ -103,33 +97,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // LON-06: Apply for a loan (create loan lead)
-    @PostMapping("/leads")
-    public ResponseEntity<Map<String, Object>> createLoanLead(
-            Authentication authentication,
-            @Valid @RequestBody LoanLeadRequest request) {
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                loanPaymentService.createLoanLead(
-                        getCustomerNo(authentication), request
-                )
-        );
-    }
-
-    // Get particular loan application
-    @GetMapping("/leads/{id}")
-    public ResponseEntity<Map<String, Object>> getLoanApplication(
-            Authentication authentication,
-            @PathVariable Long id) {
-
-        return ResponseEntity.ok(
-                service.getLoanApplication(
-                        getCustomerNo(authentication), id
-                )
-        );
-    }
-
-    // LON-08: Submit fresh loan application
+    // LON-06: Apply for a new loan
     @PostMapping("/leads")
     public ResponseEntity<Map<String, Object>> submitLoanApplication(
             Authentication authentication,
@@ -152,6 +120,19 @@ public class LoanLeadQueryController {
                 service.submitLoanApplication(
                         authenticatedCustomerNo,
                         request
+                )
+        );
+    }
+
+    // Get particular loan application
+    @GetMapping("/leads/{id}")
+    public ResponseEntity<Map<String, Object>> getLoanApplication(
+            Authentication authentication,
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                service.getLoanApplication(
+                        getCustomerNo(authentication), id
                 )
         );
     }
