@@ -31,6 +31,10 @@ public class FundTransferService {
         this.repository = repository;
     }
 
+    // =====================================================
+    // SUBMIT NEFT / RTGS / IMPS TRANSFER REQUEST
+    // =====================================================
+
     @Transactional
     public FundTransferResponse submit(
             String customerId,
@@ -55,14 +59,17 @@ public class FundTransferService {
         String ifsc = request.ifscCode().trim()
                 .toUpperCase(Locale.ROOT);
 
+        // RTGS minimum amount validation
         if ("RTGS".equals(mode)
                 && request.amount().compareTo(
                         new BigDecimal("200000.00")) < 0) {
+
             throw new IllegalArgumentException(
                     "RTGS minimum amount is Rs. 2,00,000. "
                     + "Please select NEFT or IMPS.");
         }
 
+        // 1. Validate logged-in customer
         Long createdBy;
 
         try {
@@ -72,13 +79,16 @@ public class FundTransferService {
                 WHERE customer_no = ?
                   AND user_type = 'CU'
                   AND status = 'ACTIVE'
-                """, Long.class, customerId);
+                """,
+                    Long.class,
+                    customerId);
 
         } catch (EmptyResultDataAccessException ex) {
             throw new IllegalArgumentException(
                     "Active customer user record not found.");
         }
 
+        // 2. Validate debit account ownership
         Map<String, Object> debit;
 
         try {
@@ -93,14 +103,15 @@ public class FundTransferService {
                 WHERE account_no = ?
                   AND customer_no = ?
                 """,
-                request.debitAccountId().trim(),
-                customerId);
+                    request.debitAccountId().trim(),
+                    customerId);
 
         } catch (EmptyResultDataAccessException ex) {
             throw new IllegalArgumentException(
                     "Debit account not found or does not belong to you.");
         }
 
+        // 3. Check debit account status
         String accountStatus =
                 String.valueOf(debit.get("account_status"));
 
@@ -109,6 +120,7 @@ public class FundTransferService {
                     "Debit account is not active.");
         }
 
+        // 4. Validate beneficiary IFSC
         Map<String, Object> beneficiary;
 
         try {
@@ -123,7 +135,8 @@ public class FundTransferService {
                 JOIN public."MB002001" bank
                   ON bank.bank_code = b.bank_code
                 WHERE UPPER(b.ifsc_code) = ?
-                """, ifsc);
+                """,
+                    ifsc);
 
         } catch (EmptyResultDataAccessException ex) {
             throw new IllegalArgumentException(
@@ -133,6 +146,7 @@ public class FundTransferService {
         String bankName =
                 String.valueOf(beneficiary.get("bank_name"));
 
+        // 5. Create transfer entity
         FundTransferRequestEntity entity =
                 new FundTransferRequestEntity(
                         String.valueOf(debit.get("branch_code")),
@@ -152,12 +166,27 @@ public class FundTransferService {
 
         entity.setIsSys(true);
 
+        // 6. Save transfer request
         FundTransferRequestEntity saved =
                 repository.save(entity);
+
+        // 7. Create customer notification
+        createCustomerNotification(
+                String.valueOf(debit.get("branch_code")),
+                customerId,
+                "Fund Transfer: Your " + mode
+                        + " transfer request #"
+                        + saved.getId()
+                        + " has been submitted successfully. "
+                        + "Awaiting bank processing.",
+                "FUND_TRANSFER",
+                String.valueOf(saved.getId())
+        );
 
         Integer requestSource = Boolean.TRUE.equals(saved.getIsSys())
                 ? 1 : 2;
 
+        // 8. Return response
         return new FundTransferResponse(
                 saved.getId(),
                 saved.getReqStatus(),
@@ -170,7 +199,10 @@ public class FundTransferService {
         );
     }
 
-    // GET: Check transfer status
+    // =====================================================
+    // GET TRANSFER STATUS
+    // =====================================================
+
     public TransferStatusResponse getTransferStatus(
             String customerId,
             Long requestId) {
@@ -207,7 +239,10 @@ public class FundTransferService {
                 transfer.getCreatedOn());
     }
 
-    // POST: Customer confirms a submitted transfer request
+    // =====================================================
+    // CUSTOMER CONFIRMS TRANSFER REQUEST
+    // =====================================================
+
     @Transactional
     public Map<String, Object> confirmTransfer(
             String customerId,
@@ -219,7 +254,7 @@ public class FundTransferService {
                     "Invalid customer authentication.");
         }
 
-        // Find the request belonging to this customer
+        // 1. Find transfer request belonging to customer
         Map<String, Object> transfer;
 
         try {
@@ -227,12 +262,15 @@ public class FundTransferService {
                 SELECT
                     id,
                     req_status,
-                    customer_confirmed_on
+                    customer_confirmed_on,
+                    branch_code
                 FROM public."MB004001"
                 WHERE id = ?
                   AND customer_no = ?
                 FOR UPDATE
-                """, requestId, customerId);
+                """,
+                    requestId,
+                    customerId);
 
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(
@@ -243,6 +281,7 @@ public class FundTransferService {
         String status =
                 String.valueOf(transfer.get("req_status"));
 
+        // 2. Validate transfer status
         if (!"PENDING".equalsIgnoreCase(status)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -255,7 +294,7 @@ public class FundTransferService {
                     "Transfer request has already been confirmed.");
         }
 
-        // Get the logged-in customer's internal user ID
+        // 3. Get logged-in customer's internal user ID
         Long confirmedBy;
 
         try {
@@ -265,7 +304,9 @@ public class FundTransferService {
                 WHERE customer_no = ?
                   AND user_type = 'CU'
                   AND status = 'ACTIVE'
-                """, Long.class, customerId);
+                """,
+                    Long.class,
+                    customerId);
 
         } catch (EmptyResultDataAccessException ex) {
             throw new ResponseStatusException(
@@ -273,7 +314,8 @@ public class FundTransferService {
                     "Active customer user record not found.");
         }
 
-        // Record confirmation. Do not change req_status.
+        // 4. Record customer confirmation
+        // Transfer status remains PENDING
         int updated = jdbc.update("""
             UPDATE public."MB004001"
             SET customer_confirmed_by = ?,
@@ -282,7 +324,10 @@ public class FundTransferService {
               AND customer_no = ?
               AND req_status = 'PENDING'
               AND customer_confirmed_on IS NULL
-            """, confirmedBy, requestId, customerId);
+            """,
+                confirmedBy,
+                requestId,
+                customerId);
 
         if (updated != 1) {
             throw new ResponseStatusException(
@@ -291,6 +336,19 @@ public class FundTransferService {
                     + "Please refresh and try again.");
         }
 
+        // 5. Create customer notification
+        createCustomerNotification(
+                String.valueOf(transfer.get("branch_code")),
+                customerId,
+                "Fund Transfer: Your transfer request #"
+                        + requestId
+                        + " has been confirmed successfully. "
+                        + "Awaiting bank processing.",
+                "FUND_TRANSFER",
+                String.valueOf(requestId)
+        );
+
+        // 6. Return confirmation response
         return Map.of(
                 "success", true,
                 "message", "Transfer request confirmed successfully.",
@@ -298,5 +356,38 @@ public class FundTransferService {
                 "status", "PENDING",
                 "confirmed", true
         );
+    }
+
+    // =====================================================
+    // CUSTOMER NOTIFICATION HELPER
+    // =====================================================
+
+    private void createCustomerNotification(
+            String branchCode,
+            String customerId,
+            String message,
+            String referenceType,
+            String referenceId) {
+
+        jdbc.update("""
+            INSERT INTO public."MB003001" (
+                branch_code,
+                customer_no,
+                notification,
+                category,
+                reference_type,
+                reference_id,
+                is_read,
+                created_on
+            )
+            VALUES (
+                ?, ?, ?, 'FUND_TRANSFER', ?, ?, FALSE, CURRENT_TIMESTAMP
+            )
+            """,
+                branchCode,
+                customerId,
+                message,
+                referenceType,
+                referenceId);
     }
 }

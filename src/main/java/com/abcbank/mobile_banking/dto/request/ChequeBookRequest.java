@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
@@ -17,7 +18,7 @@ public record ChequeBookRequest(
     )
     String bookType,
 
-    @NotBlank(message = "Delivery is required")
+    @NotBlank(message = "Delivery option is required")
     @Pattern(
         regexp = "(?i)BRANCH|PRIMARY_ADDRESS|DEFAULT_ADDRESS",
         message = "Invalid delivery option"

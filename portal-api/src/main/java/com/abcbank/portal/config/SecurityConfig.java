@@ -1,5 +1,4 @@
 package com.abcbank.portal.config;
-
 import com.abcbank.portal.security.JwtFilter;
 import jakarta.servlet.DispatcherType;
 
@@ -66,6 +65,9 @@ public class SecurityConfig {
                                         "ROLE_ADMIN"
                                 )
 
+                        .requestMatchers("/mobile-utilities/inbox-notifications/**")
+                                .hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_BANK_USER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+
                         .requestMatchers(HttpMethod.POST, "/themes").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/themes/**").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/themes/**").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
@@ -90,7 +92,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "http://localhost:3000"
+                "http://localhost:3000",
+                "https://galaxybankbackend-controlpanal.onrender.com"
         ));
 
         configuration.setAllowedMethods(List.of(

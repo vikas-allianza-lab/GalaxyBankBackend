@@ -1,4 +1,3 @@
-
 package com.abcbank.mobile_banking.service;
 
 import java.time.OffsetDateTime;
@@ -27,19 +26,30 @@ public class ChequeBookRequestService {
             String customerId,
             ChequeBookRequest request) {
 
+        // 1. Validate customer authentication
         if (customerId == null || customerId.isBlank()) {
             throw new IllegalArgumentException(
                     "Invalid customer authentication."
             );
         }
 
+        // 2. Validate request
         if (request == null) {
             throw new IllegalArgumentException(
                     "Cheque book request cannot be empty."
             );
         }
 
-        // 1. Validate logged-in customer
+        String normalizedCustomerId = customerId.trim();
+
+        if (request.accountNo() == null
+                || request.accountNo().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Account number is required."
+            );
+        }
+
+        // 3. Validate logged-in customer
         Long createdBy;
 
         try {
@@ -51,7 +61,7 @@ public class ChequeBookRequestService {
                   AND status = 'ACTIVE'
                 """,
                 Long.class,
-                customerId.trim()
+                normalizedCustomerId
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -60,7 +70,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 2. Validate debit account ownership
+        // 4. Validate account ownership
         Map<String, Object> account;
 
         try {
@@ -76,7 +86,7 @@ public class ChequeBookRequestService {
                   AND customer_no = ?
                 """,
                 request.accountNo().trim(),
-                customerId.trim()
+                normalizedCustomerId
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -85,7 +95,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 3. Validate account status
+        // 5. Validate account status
         String accountStatus =
                 String.valueOf(account.get("account_status"));
 
@@ -95,7 +105,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 4. Validate cheque book type and determine leaves
+        // 6. Validate cheque book type
         if (request.bookType() == null
                 || request.bookType().isBlank()) {
             throw new IllegalArgumentException(
@@ -121,10 +131,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 5. One cheque book per request
-        int noOfBooks = 1;
-
-        // 6. Validate delivery option
+        // 7. Validate delivery option
         if (request.delivery() == null
                 || request.delivery().isBlank()) {
             throw new IllegalArgumentException(
@@ -136,7 +143,7 @@ public class ChequeBookRequestService {
                 .trim()
                 .toUpperCase(Locale.ROOT);
 
-        // 7. Insert cheque book request
+        // 8. Insert cheque book request
         return jdbc.queryForObject("""
             INSERT INTO public."MB004002" (
                 branch_code,
@@ -173,7 +180,7 @@ public class ChequeBookRequestService {
             ),
 
             account.get("branch_code"),
-            customerId.trim(),
+            normalizedCustomerId,
             account.get("account_no"),
             account.get("account_status"),
             account.get("account_type"),
