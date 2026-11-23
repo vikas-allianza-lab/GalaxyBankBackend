@@ -1,5 +1,4 @@
 package com.abcbank.portal.config;
-
 import com.abcbank.portal.security.JwtFilter;
 import jakarta.servlet.DispatcherType;
 
@@ -93,7 +92,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "http://localhost:3000"
+                "http://localhost:3000",
+                "https://galaxybankbackend-controlpanal.onrender.com"
         ));
 
         configuration.setAllowedMethods(List.of(
