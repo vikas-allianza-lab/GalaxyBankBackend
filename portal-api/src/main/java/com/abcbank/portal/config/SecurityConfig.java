@@ -93,7 +93,7 @@ public class SecurityConfig {
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "http://localhost:3000",
-                "https://galaxybankbackend-controlpanal.onrender.com"
+                "https://galaxybankbackend-1.onrender.com"
         ));
 
         configuration.setAllowedMethods(List.of(
