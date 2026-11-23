@@ -15,10 +15,14 @@ public record EmiPaymentRequest(
     @Size(max = 30)
     String debitAccountId,
 
+    @NotBlank
+    @Size(max = 30)
+    String loanAccountNo,
+
     @NotNull
     @DecimalMin("0.01")
     @Digits(integer = 16, fraction = 2)
-    BigDecimal amount
+    BigDecimal installmentAmount
 
 ) {
 }

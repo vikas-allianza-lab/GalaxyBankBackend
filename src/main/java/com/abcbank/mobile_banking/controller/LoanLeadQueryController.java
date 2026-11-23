@@ -6,7 +6,10 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.abcbank.mobile_banking.service.LoanLeadQueryService;
 
@@ -37,7 +40,37 @@ public class LoanLeadQueryController {
         return authentication.getName();
     }
 
-    // GET: Previously used loan product codes
+    // LON-01: Get customer's loan accounts
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getLoans(
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                service.getLoanHistory(getCustomerNo(authentication))
+        );
+    }
+
+    // EMI: Display loan and EMI details for Pay EMI screen
+    @GetMapping("/emi-details")
+    public ResponseEntity<Map<String, Object>> getEmiDetails(
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                service.getEmiDetails(getCustomerNo(authentication))
+        );
+    }
+
+    // EMI: Display available debit accounts
+    @GetMapping("/debit-accounts")
+    public ResponseEntity<Map<String, Object>> getEmiDebitAccounts(
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                service.getEmiDebitAccounts(getCustomerNo(authentication))
+        );
+    }
+
+    // Get previously used loan product codes
     @GetMapping("/product-codes")
     public ResponseEntity<Map<String, Object>> getProductCodes(
             Authentication authentication) {
@@ -47,7 +80,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // GET: All loan applications of logged-in customer
+    // LON-07: Get all loan applications
     @GetMapping("/leads")
     public ResponseEntity<Map<String, Object>> getLoanApplications(
             Authentication authentication) {
@@ -57,7 +90,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // GET: Particular loan application
+    // Get particular loan application
     @GetMapping("/leads/{id}")
     public ResponseEntity<Map<String, Object>> getLoanApplication(
             Authentication authentication,
@@ -70,7 +103,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // GET: Existing loan accounts
+    // Get existing loan history
     @GetMapping("/history")
     public ResponseEntity<Map<String, Object>> getLoanHistory(
             Authentication authentication) {
@@ -80,7 +113,7 @@ public class LoanLeadQueryController {
         );
     }
 
-    // GET: EMI payment request history for a particular loan
+    // Get EMI payment request history
     @GetMapping("/history/{loanAccountNo}/emi-requests")
     public ResponseEntity<Map<String, Object>> getEmiRequests(
             Authentication authentication,

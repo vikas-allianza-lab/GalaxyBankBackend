@@ -1,0 +1,61 @@
+SELECT
+    u.customer_no,
+    u.full_name,
+    u.email,
+    cr.registered_mobile,
+    u.user_type,
+    u.status
+FROM public."MB001001" u
+JOIN public.mb001001cr cr
+    ON cr.customer_id = u.customer_no
+WHERE u.user_type = 'CU'
+  AND u.status = 'ACTIVE';
+
+
+  SELECT
+    id,
+    customer_no,
+    account_no AS linked_debit_account_no,
+    deposit_amount,
+    maturity_date,
+    maturity_value,
+    req_status
+FROM public."MB004004"
+ORDER BY created_on DESC;
+
+
+
+SELECT
+    id,
+    customer_no,
+    account_no AS linked_debit_account_no,
+    deposit_amount AS monthly_installment,
+    maturity_date,
+    maturity_value,
+    req_status
+FROM public."MB004005"
+ORDER BY created_on DESC;
+
+SELECT
+    id,
+    customer_no,
+    loan_account_no,
+    total_outstanding,
+    int_outstanding,
+    instal_amount,
+    expiry_date,
+    req_status,
+    created_on
+FROM public."MB004006"
+ORDER BY created_on DESC;
+
+
+
+SELECT
+    account_no,
+    customer_no,
+    account_type,
+    account_status
+FROM public."MB002003"
+ORDER BY created_on DESC;
+

@@ -12,6 +12,8 @@ target/
 .settings
 .springBeans
 .sts4-cache
+.README.zip
+.hs_err_pid*.log
 
 ### IntelliJ IDEA ###
 .idea

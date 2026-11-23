@@ -8,9 +8,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,7 +30,7 @@ public class LoanPaymentService {
 
     private static final Pattern VPA_PATTERN =
             Pattern.compile(
-                "[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}"
+                    "[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}"
             );
 
     private final JdbcTemplate jdbc;
@@ -48,16 +50,17 @@ public class LoanPaymentService {
 
             if (!"upi".equalsIgnoreCase(uri.getScheme())
                     || !"pay".equalsIgnoreCase(uri.getHost())) {
+
                 throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Only UPI payment QR codes are accepted"
+                        HttpStatus.BAD_REQUEST,
+                        "Only UPI payment QR codes are accepted"
                 );
             }
 
             if (uri.getRawQuery() == null) {
                 throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid UPI QR payload"
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid UPI QR payload"
                 );
             }
 
@@ -68,13 +71,13 @@ public class LoanPaymentService {
                 String[] parts = pair.split("=", 2);
 
                 String key = URLDecoder.decode(
-                    parts[0], StandardCharsets.UTF_8
+                        parts[0], StandardCharsets.UTF_8
                 );
 
                 String value = parts.length > 1
-                    ? URLDecoder.decode(
-                        parts[1], StandardCharsets.UTF_8)
-                    : "";
+                        ? URLDecoder.decode(
+                                parts[1], StandardCharsets.UTF_8)
+                        : "";
 
                 params.put(key, value);
             }
@@ -82,18 +85,19 @@ public class LoanPaymentService {
             String vpa = params.get("pa");
             String payeeName = params.get("pn");
 
-            if (vpa == null ||
-                    !VPA_PATTERN.matcher(vpa).matches()) {
+            if (vpa == null
+                    || !VPA_PATTERN.matcher(vpa).matches()) {
+
                 throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid UPI VPA"
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid UPI VPA"
                 );
             }
 
             if (payeeName == null || payeeName.isBlank()) {
                 throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Payee name is missing"
+                        HttpStatus.BAD_REQUEST,
+                        "Payee name is missing"
                 );
             }
 
@@ -112,8 +116,8 @@ public class LoanPaymentService {
 
                 } catch (NumberFormatException ex) {
                     throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Invalid UPI QR amount"
+                            HttpStatus.BAD_REQUEST,
+                            "Invalid UPI QR amount"
                     );
                 }
             }
@@ -128,132 +132,294 @@ public class LoanPaymentService {
 
         } catch (ResponseStatusException ex) {
             throw ex;
+
         } catch (Exception ex) {
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Unable to decode UPI QR"
+                    HttpStatus.BAD_REQUEST,
+                    "Unable to decode UPI QR"
             );
         }
     }
 
     // ------------------------------------------------
-    // LON-03: CREATE EMI PAYMENT REQUEST
+    // EMI-03: CREATE EMI PAYMENT REQUEST
     // ------------------------------------------------
 
     @Transactional
     public Map<String, Object> createEmiPayment(
             String customerNo,
-            String loanId,
             EmiPaymentRequest request) {
 
         Long userId = findActiveCustomerUserId(customerNo);
 
-        // Validate debit account ownership
+        // 1. Validate debit account ownership
+
         Map<String, Object> debit = findAccount(
-            request.debitAccountId(), customerNo
+                request.debitAccountId(),
+                customerNo
         );
 
         String debitStatus =
-            String.valueOf(debit.get("account_status"));
+                String.valueOf(debit.get("account_status"));
 
         String debitType =
-            String.valueOf(debit.get("account_type"));
+                String.valueOf(debit.get("account_type"));
 
         if (!"ACTIVE".equalsIgnoreCase(debitStatus)) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Debit account is not active"
+                    HttpStatus.BAD_REQUEST,
+                    "Debit account is not active"
             );
         }
 
         if (!"SAVINGS".equalsIgnoreCase(debitType)
                 && !"CURRENT".equalsIgnoreCase(debitType)) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Only Savings and Current accounts are allowed"
+                    HttpStatus.BAD_REQUEST,
+                    "Only Savings and Current accounts are allowed"
             );
         }
 
-        // Validate loan account ownership
+        // 2. Validate loan account ownership
+
         Map<String, Object> loan = findAccount(
-            loanId, customerNo
+                request.loanAccountNo(),
+                customerNo
         );
 
         String loanStatus =
-            String.valueOf(loan.get("account_status"));
+                String.valueOf(loan.get("account_status"));
 
         String loanType =
-            String.valueOf(loan.get("account_type"));
+                String.valueOf(loan.get("account_type"));
 
         if (!"ACTIVE".equalsIgnoreCase(loanStatus)) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Loan account is not active"
+                    HttpStatus.BAD_REQUEST,
+                    "Loan account is not active"
             );
         }
 
         if (!"LOAN".equalsIgnoreCase(loanType)) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Selected account is not a loan account"
+                    HttpStatus.BAD_REQUEST,
+                    "Selected account is not a loan account"
             );
         }
 
-        // Daily cutoff: 5 PM Indian time
+        // 3. Check banking cutoff time
+
         LocalTime currentTime = LocalTime.now(BANK_ZONE);
 
         if (!currentTime.isBefore(LocalTime.of(17, 0))) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "EMI payment requests are not accepted after 5:00 PM IST"
+                    HttpStatus.BAD_REQUEST,
+                    "EMI payment requests are not accepted after 5:00 PM IST"
             );
         }
 
-        // IMPORTANT:
-        // MB002003 does not contain available balance.
-        // This endpoint only creates a pending request.
-        // It does not debit the account.
+        // 4. Fetch latest EMI details
 
-        Long requestId = jdbc.queryForObject("""
-            INSERT INTO public."MB004006" (
-                branch_code,
-                customer_no,
-                account_no,
-                account_status,
-                account_type,
-                loan_account_no,
-                loan_ac_status,
-                emi_amount,
-                instal_amount,
-                created_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-            """,
-            Long.class,
-            debit.get("branch_code"),
-            customerNo,
-            request.debitAccountId(),
-            debitStatus,
-            debitType,
-            loanId,
-            loanStatus,
-            request.amount(),
-            request.amount(),
-            userId
+        Map<String, Object> emiDetails;
+
+        try {
+
+            emiDetails = jdbc.queryForMap("""
+                    SELECT
+                        loan_ac_name,
+                        emi_amount,
+                        instal_amount,
+                        total_outstanding,
+                        int_outstanding,
+                        expiry_date
+                    FROM public."MB004006"
+                    WHERE customer_no = ?
+                      AND loan_account_no = ?
+                    ORDER BY created_on DESC, id DESC
+                    LIMIT 1
+                    """,
+                    customerNo,
+                    request.loanAccountNo()
+            );
+
+        } catch (EmptyResultDataAccessException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "EMI installment details are not available for this loan"
+            );
+        }
+
+        // Use recorded installment amount.
+        // If instal_amount is null, use emi_amount.
+
+        BigDecimal scheduledAmount =
+                (BigDecimal) emiDetails.get("instal_amount");
+
+        if (scheduledAmount == null) {
+            scheduledAmount =
+                    (BigDecimal) emiDetails.get("emi_amount");
+        }
+
+        if (scheduledAmount == null
+                || scheduledAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Valid installment amount is not available"
+            );
+        }
+
+        // 5. Validate submitted installment amount
+
+        if (request.installmentAmount() == null
+                || request.installmentAmount()
+                        .compareTo(scheduledAmount) != 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Submitted amount does not match the installment amount"
+            );
+        }
+
+        // 6. Check duplicate pending EMI request
+
+        Integer pendingCount = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM public."MB004006"
+                WHERE customer_no = ?
+                  AND loan_account_no = ?
+                  AND UPPER(req_status) = 'PENDING'
+                """,
+                Integer.class,
+                customerNo,
+                request.loanAccountNo()
         );
 
-        Map<String, Object> response = new HashMap<>();
+        if (pendingCount != null && pendingCount > 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "An EMI payment request is already pending for this loan"
+            );
+        }
+
+        // 7. Insert EMI payment request
+
+        Long requestId = jdbc.queryForObject("""
+                INSERT INTO public."MB004006" (
+                    branch_code,
+                    customer_no,
+                    account_no,
+                    account_status,
+                    account_type,
+                    loan_account_no,
+                    loan_ac_status,
+                    loan_ac_name,
+                    emi_amount,
+                    instal_amount,
+                    total_outstanding,
+                    int_outstanding,
+                    expiry_date,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
+                """,
+                Long.class,
+
+                debit.get("branch_code"),
+                customerNo,
+                request.debitAccountId(),
+                debitStatus,
+                debitType,
+
+                request.loanAccountNo(),
+                loanStatus,
+                emiDetails.get("loan_ac_name"),
+
+                request.installmentAmount(),
+                scheduledAmount,
+
+                emiDetails.get("total_outstanding"),
+                emiDetails.get("int_outstanding"),
+                emiDetails.get("expiry_date"),
+
+                userId
+        );
+
+        // 8. Return response
+
+        Map<String, Object> response = new LinkedHashMap<>();
 
         response.put("requestId", requestId);
-        response.put("status", "PENDING");
-        response.put("loanAccountId", loanId);
+        response.put("customerNo", customerNo);
         response.put("debitAccountId", request.debitAccountId());
-        response.put("amount", request.amount());
-        response.put("message",
-            "EMI payment request submitted for processing");
+        response.put("loanAccountNo", request.loanAccountNo());
+        response.put("installmentAmount", request.installmentAmount());
+        response.put("status", "PENDING");
+
+        response.put(
+                "message",
+                "EMI payment request submitted successfully"
+        );
 
         return response;
+    }
+
+    // ------------------------------------------------
+    // LON-04: GET EMI PAYMENT REQUEST BY REQUEST ID
+    // ------------------------------------------------
+
+    public Map<String, Object> getEmiPaymentRequest(
+            String customerNo,
+            Long requestId) {
+
+        String sql = """
+                SELECT
+                    id AS "requestId",
+                    branch_code AS "branchCode",
+                    customer_no AS "customerNo",
+                    account_no AS "debitAccountId",
+                    account_status AS "accountStatus",
+                    account_type AS "accountType",
+                    req_status AS "status",
+                    loan_account_no AS "loanAccountNo",
+                    loan_ac_status AS "loanAccountStatus",
+                    loan_ac_name AS "loanAccountName",
+                    emi_amount AS "emiAmount",
+                    instal_amount AS "installmentAmount",
+                    total_outstanding AS "totalOutstanding",
+                    int_outstanding AS "interestOutstanding",
+                    expiry_date AS "expiryDate",
+                    created_on AS "createdOn",
+                    verified_by AS "verifiedBy",
+                    verified_on AS "verifiedOn"
+                FROM public."MB004006"
+                WHERE id = ?
+                  AND customer_no = ?
+                """;
+
+        try {
+
+            return jdbc.queryForMap(
+                    sql,
+                    requestId,
+                    customerNo
+            );
+
+        } catch (EmptyResultDataAccessException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "EMI payment request not found"
+            );
+        }
     }
 
     // ------------------------------------------------
@@ -269,102 +435,114 @@ public class LoanPaymentService {
 
         if (request.householdExpense()
                 .compareTo(request.totalIncome()) > 0) {
+
             throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Household expense cannot exceed total income"
+                    HttpStatus.BAD_REQUEST,
+                    "Household expense cannot exceed total income"
             );
         }
 
         // Get customer's active account and branch
+
         Map<String, Object> account = jdbc.queryForMap("""
-            SELECT branch_code
-            FROM public."MB002003"
-            WHERE customer_no = ?
-              AND account_status = 'ACTIVE'
-            ORDER BY created_on
-            LIMIT 1
-            """, customerNo);
+                SELECT branch_code
+                FROM public."MB002003"
+                WHERE customer_no = ?
+                  AND account_status = 'ACTIVE'
+                ORDER BY created_on
+                LIMIT 1
+                """,
+                customerNo
+        );
 
         String branchCode =
-            String.valueOf(account.get("branch_code"));
+                String.valueOf(account.get("branch_code"));
 
         // Block duplicate open loan applications
+
         Integer duplicate = jdbc.queryForObject("""
-            SELECT COUNT(*)
-            FROM public."MB004010"
-            WHERE customer_no = ?
-              AND product_code = ?
-              AND req_status = 'PENDING'
-            """,
-            Integer.class,
-            customerNo,
-            request.productType()
+                SELECT COUNT(*)
+                FROM public."MB004010"
+                WHERE customer_no = ?
+                  AND product_code = ?
+                  AND req_status = 'PENDING'
+                """,
+                Integer.class,
+                customerNo,
+                request.productType()
         );
 
         if (duplicate != null && duplicate > 0) {
+
             throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "An open loan application already exists for this product"
+                    HttpStatus.CONFLICT,
+                    "An open loan application already exists for this product"
             );
         }
 
         // Fetch registered mobile
+
         String mobile = jdbc.queryForObject("""
-            SELECT registered_mobile
-            FROM public.mb001001cr
-            WHERE customer_id = ?
-            """,
-            String.class,
-            customerNo
+                SELECT registered_mobile
+                FROM public.mb001001cr
+                WHERE customer_id = ?
+                """,
+                String.class,
+                customerNo
         );
 
         // Insert into existing MB004010
+
         Long requestId = jdbc.queryForObject("""
-            INSERT INTO public."MB004010" (
-                branch_code,
-                customer_no,
+                INSERT INTO public."MB004010" (
+                    branch_code,
+                    customer_no,
+                    mobile,
+                    email,
+                    product_code,
+                    loan_amount,
+                    total_income,
+                    total_exp,
+                    created_by
+                )
+                SELECT
+                    ?,
+                    ?,
+                    ?,
+                    u.email,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
+                FROM public."MB001001" u
+                WHERE u.user_id = ?
+                RETURNING id
+                """,
+                Long.class,
+
+                branchCode,
+                customerNo,
                 mobile,
-                email,
-                product_code,
-                loan_amount,
-                total_income,
-                total_exp,
-                created_by
-            )
-            SELECT
-                ?,
-                ?,
-                ?,
-                u.email,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-            FROM public."MB001001" u
-            WHERE u.user_id = ?
-            RETURNING id
-            """,
-            Long.class,
-            branchCode,
-            customerNo,
-            mobile,
-            request.productType(),
-            request.amount(),
-            request.totalIncome(),
-            request.householdExpense(),
-            userId,
-            userId
+                request.productType(),
+                request.amount(),
+                request.totalIncome(),
+                request.householdExpense(),
+                userId,
+                userId
         );
 
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
 
         response.put("requestId", requestId);
         response.put("status", "CREATED");
         response.put("productType", request.productType());
         response.put("amount", request.amount());
-        response.put("message",
-            "Loan application submitted successfully");
+
+        response.put(
+                "message",
+                "Loan application submitted successfully"
+        );
 
         response.put("tenureMonthsStored", false);
         response.put("purposeStored", false);
@@ -377,53 +555,59 @@ public class LoanPaymentService {
     // COMMON DATABASE METHODS
     // ------------------------------------------------
 
+    // Find logged-in customer's active user ID
+
     private Long findActiveCustomerUserId(String customerNo) {
 
         try {
+
             return jdbc.queryForObject("""
-                SELECT user_id
-                FROM public."MB001001"
-                WHERE customer_no = ?
-                  AND user_type = 'CU'
-                  AND user_role = 'CUSTOMER'
-                  AND status = 'ACTIVE'
-                """,
-                Long.class,
-                customerNo
+                    SELECT user_id
+                    FROM public."MB001001"
+                    WHERE customer_no = ?
+                      AND status = 'ACTIVE'
+                    """,
+                    Long.class,
+                    customerNo
             );
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
+        } catch (EmptyResultDataAccessException ex) {
+
             throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Active customer user was not found"
+                    HttpStatus.FORBIDDEN,
+                    "Active customer user was not found"
             );
         }
     }
+
+    // Find account belonging to logged-in customer
 
     private Map<String, Object> findAccount(
             String accountNo,
             String customerNo) {
 
         try {
+
             return jdbc.queryForMap("""
-                SELECT
-                    account_no,
-                    customer_no,
-                    branch_code,
-                    account_type,
-                    account_status
-                FROM public."MB002003"
-                WHERE account_no = ?
-                  AND customer_no = ?
-                """,
-                accountNo,
-                customerNo
+                    SELECT
+                        account_no,
+                        customer_no,
+                        branch_code,
+                        account_type,
+                        account_status
+                    FROM public."MB002003"
+                    WHERE account_no = ?
+                      AND customer_no = ?
+                    """,
+                    accountNo,
+                    customerNo
             );
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
+        } catch (EmptyResultDataAccessException ex) {
+
             throw new ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "Account not found for logged-in customer"
+                    HttpStatus.NOT_FOUND,
+                    "Account not found for logged-in customer"
             );
         }
     }
