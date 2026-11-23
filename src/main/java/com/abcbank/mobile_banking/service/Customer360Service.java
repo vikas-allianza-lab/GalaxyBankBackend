@@ -17,14 +17,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class Customer360Service {
 
     private final JdbcTemplate jdbc;
+    private final CustomerIdentityResolver identityResolver;
 
-    public Customer360Service(JdbcTemplate jdbc) {
+    public Customer360Service(JdbcTemplate jdbc, CustomerIdentityResolver identityResolver) {
         this.jdbc = jdbc;
+        this.identityResolver = identityResolver;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> getCustomer360(String customerNo) {
-
+    public Map<String, Object> getCustomer360(String principal) {
+        String customerNo = identityResolver.resolve(principal).customerNo();
         Map<String, Object> response = new LinkedHashMap<>();
 
         // 1. Customer information
@@ -53,6 +55,17 @@ public class Customer360Service {
         }
 
         response.put("customerName", customer.get("full_name"));
+        response.put("accounts", jdbc.queryForList("""
+            SELECT a.account_id AS "accountId", a.account_type AS type,
+                   (CASE WHEN length(a.account_no)>4 THEN repeat('X',length(a.account_no)-4)||right(a.account_no,4) ELSE a.account_no END) AS "maskedNumber",
+                   a.account_status AS status, a.branch_code AS "branchCode",
+                   b.branch_name AS branch, b.ifsc_code AS ifsc, bal.available_balance AS "availableBalance", bal.ledger_balance AS "ledgerBalance", bal.currency
+              FROM public."MB002003" a
+              LEFT JOIN public."MB002002" b ON b.branch_code=a.branch_code
+              LEFT JOIN public.mobile_account_balances bal ON bal.account_no=a.account_no AND bal.customer_no=a.customer_no
+             WHERE a.customer_no=? ORDER BY a.created_on DESC
+            """, customerNo));
+
         response.put("customerNo", maskCustomerNo(customerNo));
         response.put("email", customer.get("email"));
         response.put("mobile", customer.get("mobile"));
@@ -92,6 +105,15 @@ public class Customer360Service {
             """, customerNo, customerNo);
 
         response.put("deposits", deposits);
+        long fdCount = deposits.stream().filter(d -> "FD".equals(String.valueOf(d.get("deposit_type")))).count();
+        long rdCount = deposits.stream().filter(d -> "RD".equals(String.valueOf(d.get("deposit_type")))).count();
+        Map<String, Object> depositsSummary = new LinkedHashMap<>();
+        depositsSummary.put("fdCount", fdCount);
+        depositsSummary.put("rdCount", rdCount);
+        depositsSummary.put("totalCount", deposits.size());
+        depositsSummary.put("totalBalance", null);
+        depositsSummary.put("message", "Deposit balance requires core-banking deposit account balances.");
+        response.put("depositsSummary", depositsSummary);
 
         // The FD amount is a principal amount.
         // The RD amount is a monthly instalment.
@@ -119,6 +141,7 @@ public class Customer360Service {
             """, customerNo);
 
         response.put("advances", advances);
+        response.put("loans", advances);
 
         // Sum the latest outstanding snapshot for each loan.
         BigDecimal totalAdvances = BigDecimal.ZERO;

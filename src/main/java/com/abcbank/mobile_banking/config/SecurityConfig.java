@@ -34,6 +34,13 @@ public class SecurityConfig {
                                 "/actuator/health"
                         ).permitAll()
 
+.requestMatchers(
+        "/api/v1/notifications/**",
+        "/api/v1/grievances/**",
+        "/api/v1/branches/**"
+).permitAll()
+
+
                         .requestMatchers(
                                 "/api/v1/auth/web/login",
                                 "/api/v1/auth/mpin/login",
@@ -66,6 +73,9 @@ public class SecurityConfig {
 
                            .requestMatchers("/api/v1/positive-pay/**")
 .hasRole("CUSTOMER")
+
+                        .requestMatchers("/api/v1/customers/**", "/api/v1/customer-360", "/api/v1/accounts/**")
+                        .hasRole("CUSTOMER")
                        
 
                         .anyRequest().authenticated()

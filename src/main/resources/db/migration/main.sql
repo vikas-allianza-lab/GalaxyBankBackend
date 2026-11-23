@@ -1782,3 +1782,5 @@ ON public."MB004012"(beneficiary_id, created_on DESC);
 CREATE INDEX IF NOT EXISTS idx_mb004012_customer
 ON public."MB004012"(customer_no);
 
+ALTER TABLE public."MB001001"
+ADD COLUMN account_no VARCHAR(20);
