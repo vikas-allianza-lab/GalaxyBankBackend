@@ -6,19 +6,21 @@ import jakarta.validation.constraints.Size;
 
 public record ChequeBookRequest(
 
-    @NotBlank
+    @NotBlank(message = "Account number is required")
     @Size(max = 30)
     String accountNo,
 
-    @NotNull
-    @Min(1)
-    @Max(32767)
-    Integer noofBooks,
-
-    @NotBlank
+    @NotBlank(message = "Book type is required")
     @Pattern(
-        regexp = "(?i)HOME|BRANCH",
-        message = "Delivery must be HOME or BRANCH"
+        regexp = "(?i)STANDARD|PREMIUM",
+        message = "Book type must be STANDARD or PREMIUM"
+    )
+    String bookType,
+
+    @NotBlank(message = "Delivery is required")
+    @Pattern(
+        regexp = "(?i)BRANCH|PRIMARY_ADDRESS|DEFAULT_ADDRESS",
+        message = "Invalid delivery option"
     )
     String delivery
 

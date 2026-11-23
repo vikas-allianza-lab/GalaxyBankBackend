@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.service;
 
 import java.time.OffsetDateTime;
@@ -32,11 +33,9 @@ public class ChequeBookRequestService {
             );
         }
 
-        // Leaves must be 25 or 50
-        if (request.noofLeaves() == null
-                || (request.noofLeaves() != 25 && request.noofLeaves() != 50)) {
+        if (request == null) {
             throw new IllegalArgumentException(
-                    "Number of leaves must be 25 or 50."
+                    "Cheque book request cannot be empty."
             );
         }
 
@@ -48,11 +47,11 @@ public class ChequeBookRequestService {
                 SELECT user_id
                 FROM public."MB001001"
                 WHERE customer_no = ?
-                  AND user_type = 'CU'
+                  AND user_role = 'CU'
                   AND status = 'ACTIVE'
                 """,
-                    Long.class,
-                    customerId
+                Long.class,
+                customerId.trim()
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -76,8 +75,8 @@ public class ChequeBookRequestService {
                 WHERE account_no = ?
                   AND customer_no = ?
                 """,
-                    request.accountNo().trim(),
-                    customerId
+                request.accountNo().trim(),
+                customerId.trim()
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -86,7 +85,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 3. Check account status
+        // 3. Validate account status
         String accountStatus =
                 String.valueOf(account.get("account_status"));
 
@@ -96,73 +95,92 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 4. Validate cheque book type
+        // 4. Validate cheque book type and determine leaves
+        if (request.bookType() == null
+                || request.bookType().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Cheque book type is required."
+            );
+        }
+
         String bookType = request.bookType()
-            .trim()
-            .toUpperCase(Locale.ROOT);
+                .trim()
+                .toUpperCase(Locale.ROOT);
 
         int noOfLeaves;
 
         if ("STANDARD".equals(bookType)) {
             noOfLeaves = 25;
+
         } else if ("PREMIUM".equals(bookType)) {
             noOfLeaves = 50;
+
         } else {
             throw new IllegalArgumentException(
-                "Book type must be STANDARD or PREMIUM."
+                    "Book type must be STANDARD or PREMIUM."
             );
         }
 
-        // One cheque book per request
+        // 5. One cheque book per request
         int noOfBooks = 1;
 
-        // 5. Normalize delivery option
+        // 6. Validate delivery option
+        if (request.delivery() == null
+                || request.delivery().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Delivery option is required."
+            );
+        }
+
         String delivery = request.delivery()
                 .trim()
                 .toUpperCase(Locale.ROOT);
 
-        // 6. Insert cheque book request
-       return jdbc.queryForObject("""
-    INSERT INTO public."MB004002" (
-        branch_code,
-        customer_no,
-        account_no,
-        account_status,
-        account_type,
-        book_type,
-        no_of_leaves,
-        delivery,
-        created_by
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    RETURNING
-        id,
-        req_status,
-        account_no,
-        no_of_leaves,
-        delivery,
-        created_on
-    """,
+        // 7. Insert cheque book request
+        return jdbc.queryForObject("""
+            INSERT INTO public."MB004002" (
+                branch_code,
+                customer_no,
+                account_no,
+                account_status,
+                account_type,
+                book_type,
+                no_of_leaves,
+                delivery,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING
+                id,
+                req_status,
+                account_no,
+                no_of_leaves,
+                delivery,
+                created_on
+            """,
 
-    (rs, rowNum) -> new ChequeBookResponse(
-        rs.getLong("id"),
-        rs.getString("req_status"),
-        rs.getString("account_no"),
-        rs.getInt("no_of_leaves"),
-        rs.getString("delivery"),
-        rs.getObject("created_on", OffsetDateTime.class),
-        "Cheque book request submitted successfully."
-    ),
+            (rs, rowNum) -> new ChequeBookResponse(
+                    rs.getLong("id"),
+                    rs.getString("req_status"),
+                    rs.getString("account_no"),
+                    rs.getInt("no_of_leaves"),
+                    rs.getString("delivery"),
+                    rs.getObject(
+                            "created_on",
+                            OffsetDateTime.class
+                    ),
+                    "Cheque book request submitted successfully."
+            ),
 
-    account.get("branch_code"),
-    customerId,
-    account.get("account_no"),
-    account.get("account_status"),
-    account.get("account_type"),
-    bookType,
-    noOfLeaves,
-    delivery,
-    createdBy
-);
+            account.get("branch_code"),
+            customerId.trim(),
+            account.get("account_no"),
+            account.get("account_status"),
+            account.get("account_type"),
+            bookType,
+            noOfLeaves,
+            delivery,
+            createdBy
+        );
     }
 }
