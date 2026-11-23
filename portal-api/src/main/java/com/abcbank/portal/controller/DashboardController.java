@@ -213,25 +213,39 @@ public class DashboardController {
     public Map<String, Object> superAdmin() {
         Cached hit = cache.get("#super");
         if (hit != null && System.currentTimeMillis() - hit.at() < CACHE_MS) return hit.data();
-
         Map<String, Set<String>> cols = columns();
-        StringBuilder sql = new StringBuilder("select (select count(*) from public.\"MB001001\") as users");
-        List<String> parts = new ArrayList<>();
-        for (String t : REQUEST_TABLES.values()) {
-            if (cols.containsKey(t)) parts.add("(select count(*) from public.\"" + t + "\")");
+        long users = db.queryForObject("select count(*) from public.\"MB001001\"", Long.class);
+        long branches = db.queryForObject("select count(*) from public.\"MB002002\"", Long.class);
+        long banks = db.queryForObject("select count(*) from public.\"MB002001\"", Long.class);
+        List<String> requestCountParts = new ArrayList<>();
+        List<String> pendingParts = new ArrayList<>();
+        for (String table : REQUEST_TABLES.values()) {
+            Set<String> c = cols.get(table);
+            if (c == null || c.isEmpty()) continue;
+            String t = "public.\"" + table + "\"";
+            requestCountParts.add("(select count(*) from " + t + ")");
+            if (c.contains("req_status")) pendingParts.add("(select count(*) from " + t + " where upper(req_status::text) in ('NEW','PENDING','SUBMITTED','IN_REVIEW'))");
         }
-        sql.append(", ").append(parts.isEmpty() ? "cast(0 as bigint)" : String.join(" + ", parts)).append(" as requests");
-        Map<String, Object> r = db.queryForMap(sql.toString());
-        long users = ((Number) r.get("users")).longValue();
-        long total = ((Number) r.get("requests")).longValue();
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("stats", List.of(
-                stat("banks", "No. of banks", 1, null, null, "banks"),
-                stat("users", "No. of application users", users, null, null, "users"),
-                stat("requests", "No. of requests", total, null, null, "requests")));
-        out.put("recentBanks", List.of());
-        out.put("requestsByBank", List.of());
+        long total = requestCountParts.isEmpty() ? 0 : db.queryForObject("select " + String.join(" + ", requestCountParts), Long.class);
+        long pending = pendingParts.isEmpty() ? 0 : db.queryForObject("select " + String.join(" + ", pendingParts), Long.class);
+        List<Map<String,Object>> bankRows = db.queryForList("select b.bank_code as code, b.bank_name as name, (select count(*) from public.\"MB002002\" br where br.bank_code=b.bank_code) as branches, (select count(*) from public.\"MB001001\" u where u.branch in (select br.branch_code from public.\"MB002002\" br where br.bank_code=b.bank_code)) as users from public.\"MB002001\" b order by b.bank_name");
+        List<Map<String,Object>> requestsByBank = new ArrayList<>();
+        for (Map<String,Object> bank : bankRows) {
+            String code = Objects.toString(bank.get("code"), "");
+            List<String> parts = new ArrayList<>();
+            for (String table : REQUEST_TABLES.values()) {
+                Set<String> c = cols.get(table);
+                if (c != null && c.contains("branch_code")) parts.add("(select count(*) from public.\"" + table + "\" r where r.branch_code in (select branch_code from public.\"MB002002\" where bank_code='" + code.replace("'", "''") + "'))");
+            }
+            long count = parts.isEmpty() ? 0 : db.queryForObject("select " + String.join(" + ", parts), Long.class);
+            requestsByBank.add(Map.of("label", Objects.toString(bank.get("name"), code), "count", count));
+            bank.put("requests", count);
+            bank.put("type", "Bank");
+            bank.put("status", "active");
+        }
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("stats", List.of(stat("banks", "No. of banks", banks, null, null, "banks"), stat("branches", "Total branches", branches, null, null, "branches"), stat("users", "No. of application users", users, null, null, "users"), stat("pending", "Pending requests", pending, null, pending > 0 ? "warning" : "success", "requests"), stat("requests", "No. of requests", total, null, null, "requests")));
+        out.put("recentBanks", bankRows); out.put("requestsByBank", requestsByBank);
         cache.put("#super", new Cached(System.currentTimeMillis(), out));
         return out;
     }
