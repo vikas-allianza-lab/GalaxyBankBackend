@@ -1960,3 +1960,18 @@ ADD COLUMN IF NOT EXISTS branch_code VARCHAR(20),
 ADD COLUMN IF NOT EXISTS target_role VARCHAR(30),
 ADD COLUMN IF NOT EXISTS reference_id VARCHAR(100),
 ADD COLUMN IF NOT EXISTS reference_type VARCHAR(50);
+
+
+
+ALTER TABLE public."MB003001"
+ADD COLUMN IF NOT EXISTS category VARCHAR(40)
+    NOT NULL DEFAULT 'BANK_ANNOUNCEMENT',
+ADD COLUMN IF NOT EXISTS reference_type VARCHAR(40),
+ADD COLUMN IF NOT EXISTS reference_id VARCHAR(100);
+
+
+CREATE INDEX IF NOT EXISTS idx_mb003001_customer_category
+ON public."MB003001" (customer_no, category);
+
+CREATE INDEX IF NOT EXISTS idx_mb003001_reference
+ON public."MB003001" (reference_type, reference_id);

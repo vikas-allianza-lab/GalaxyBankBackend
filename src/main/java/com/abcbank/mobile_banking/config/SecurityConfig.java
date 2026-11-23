@@ -3,7 +3,6 @@ package com.abcbank.mobile_banking.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -35,18 +34,13 @@ public class SecurityConfig {
                                 "/actuator/health"
                         ).permitAll()
 
-.requestMatchers(
-        "/api/v1/notifications/**",
-        "/api/v1/grievances/**",
-        "/api/v1/branches/**"
-).permitAll()
+                        .requestMatchers("/api/v1/notifications/**")
+                        .hasRole("CUSTOMER")
 
-
-.requestMatchers(
-        "/api/v1/notifications/**",
-        "/api/v1/grievances/**",
-        "/api/v1/branches/**"
-).permitAll()
+                        .requestMatchers(
+                                "/api/v1/grievances/**",
+                                "/api/v1/branches/**"
+                        ).permitAll()
 
 
                         .requestMatchers(
@@ -69,40 +63,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/requests/stop-payment")
                         .hasAuthority("SCOPE_fund:transfer")
 
-                        .requestMatchers(
-                                "/api/v1/deposits/**",
-                                "/api/v1/locker/**",
-                                "/api/v1/positive-pay/**"
-                        )
+                        .requestMatchers("/api/v1/deposits/**")
                         .hasRole("CUSTOMER")
 
-                        .requestMatchers(
-                                "/api/v1/loans",
-                                "/api/v1/loans/**"
-                        )
+                        .requestMatchers("/api/v1/locker/**")
                         .hasRole("CUSTOMER")
 
-                        // CNT-01 and CNT-03: Public APIs
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/content/bank-info",
-                                "/api/v1/config/app"
-                        )
-                        .permitAll()
-
-                        // CNT-02, CNT-04 and CNT-05: Customer JWT required
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/content/banners",
-                                "/api/v1/config/cut-off-times",
-                                "/api/v1/config/transaction-limits"
-                        )
+                        // Beneficiary APIs
+                        .requestMatchers("/api/v1/beneficiaries/**")
                         .hasRole("CUSTOMER")
 
                            .requestMatchers("/api/v1/positive-pay/**")
 .hasRole("CUSTOMER")
 
-                        .requestMatchers("/api/v1/customers/**", "/api/v1/customer-360", "/api/v1/accounts/**")
+                        .requestMatchers("/api/v1/customers/**", 
+                        "/api/v1/customer-360", "/api/v1/accounts/**")
                         .hasRole("CUSTOMER")
                        
 

@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
@@ -6,16 +7,18 @@ import jakarta.validation.constraints.Size;
 
 public record ChequeBookRequest(
 
-    @NotBlank
+    @NotBlank(message = "Account number is required")
     @Size(max = 30)
     String accountNo,
 
-    @NotNull
-    @Min(1)
-    @Max(32767)
-    Integer noofBooks,
+    @NotBlank(message = "Book type is required")
+    @Pattern(
+        regexp = "(?i)STANDARD|PREMIUM",
+        message = "Book type must be STANDARD or PREMIUM"
+    )
+    String bookType,
 
-    @NotBlank
+    @NotBlank(message = "Delivery option is required")
     @Pattern(
         regexp = "(?i)HOME|BRANCH",
         message = "Delivery must be HOME or BRANCH"

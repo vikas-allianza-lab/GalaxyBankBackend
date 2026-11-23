@@ -66,6 +66,9 @@ public class SecurityConfig {
                                         "ROLE_ADMIN"
                                 )
 
+                        .requestMatchers("/mobile-utilities/inbox-notifications/**")
+                                .hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_BANK_USER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+
                         .requestMatchers(HttpMethod.POST, "/themes").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/themes/**").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/themes/**").hasAnyAuthority("ROLE_BANK_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN")
