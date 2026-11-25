@@ -13,34 +13,46 @@ import jakarta.validation.constraints.Size;
 
 public record LoanLeadRequest(
 
+    // Customer number
+    @NotBlank
+    @Size(max = 30)
+    String customerNo,
+
+    // Loan product type
     @NotBlank
     @Size(max = 20)
     String productType,
 
+    // Loan amount
     @NotNull
     @DecimalMin("0.01")
     @Digits(integer = 16, fraction = 2)
     BigDecimal amount,
 
+    // Loan tenure
     @NotNull
     @Min(1)
     @Max(360)
     Integer tenureMonths,
 
+    // Loan purpose
     @NotBlank
     @Size(max = 500)
     String purpose,
 
+    // Total monthly income
     @NotNull
     @DecimalMin("0.00")
     @Digits(integer = 16, fraction = 2)
     BigDecimal totalIncome,
 
+    // Monthly household expenses
     @NotNull
     @DecimalMin("0.00")
     @Digits(integer = 16, fraction = 2)
     BigDecimal householdExpense,
 
+    // Security value
     @DecimalMin("0.01")
     @Digits(integer = 16, fraction = 2)
     BigDecimal securityValue

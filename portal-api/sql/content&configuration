@@ -1,0 +1,118 @@
+CREATE TABLE IF NOT EXISTS public.customer_contact_change_challenges (
+    id BIGSERIAL PRIMARY KEY,
+
+    customer_id VARCHAR(30) NOT NULL,
+
+    contact_type VARCHAR(10) NOT NULL
+        CHECK (contact_type IN ('MOBILE', 'EMAIL')),
+
+    new_value VARCHAR(254) NOT NULL,
+
+    otp_hash VARCHAR(255) NOT NULL,
+
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    attempts INTEGER NOT NULL DEFAULT 0,
+
+    consumed BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_contact_change_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES public.mb001001cr(customer_id),
+
+    CONSTRAINT chk_contact_change_attempts
+        CHECK (attempts >= 0 AND attempts <= 5)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_change_customer
+ON public.customer_contact_change_challenges
+(customer_id, contact_type, created_at DESC);
+
+
+
+
+
+-- Additional profile fields
+ALTER TABLE public."MB001001"
+    ADD COLUMN IF NOT EXISTS gender VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS address VARCHAR(250),
+    ADD COLUMN IF NOT EXISTS city VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS state VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS pincode VARCHAR(6);
+
+-- CNT-02: Mobile app banners
+CREATE TABLE IF NOT EXISTS public.content_banners (
+    banner_id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(150) NOT NULL,
+    description VARCHAR(500),
+    image_url VARCHAR(1000) NOT NULL,
+    target_url VARCHAR(1000),
+    display_order INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE','INACTIVE')),
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_banner_window CHECK (
+        ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_banners_active
+ON public.content_banners(status, display_order, starts_at, ends_at);
+
+-- CNT-03: App configuration
+CREATE TABLE IF NOT EXISTS public.app_configuration (
+    config_id BIGSERIAL PRIMARY KEY,
+    platform VARCHAR(20) NOT NULL DEFAULT 'ANDROID',
+    latest_version VARCHAR(30) NOT NULL,
+    minimum_supported_version VARCHAR(30) NOT NULL,
+    force_update BOOLEAN NOT NULL DEFAULT FALSE,
+    maintenance_mode BOOLEAN NOT NULL DEFAULT FALSE,
+    maintenance_message VARCHAR(500),
+    support_email VARCHAR(254),
+    support_mobile VARCHAR(20),
+    privacy_policy_url VARCHAR(1000),
+    terms_url VARCHAR(1000),
+    status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE','INACTIVE')),
+    modified_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_app_configuration_platform UNIQUE(platform)
+);
+
+-- CNT-04: Transaction cut-off times
+CREATE TABLE IF NOT EXISTS public.transaction_cut_off_times (
+    cutoff_id BIGSERIAL PRIMARY KEY,
+    transaction_type VARCHAR(40) NOT NULL,
+    day_of_week SMALLINT NOT NULL
+        CHECK (day_of_week BETWEEN 1 AND 7),
+    cutoff_time TIME NOT NULL,
+    timezone VARCHAR(60) NOT NULL DEFAULT 'Asia/Kolkata',
+    is_working_day BOOLEAN NOT NULL DEFAULT TRUE,
+    status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE','INACTIVE')),
+    CONSTRAINT uq_cutoff_type_day
+        UNIQUE(transaction_type, day_of_week)
+);
+
+-- CNT-05: Transaction limits
+CREATE TABLE IF NOT EXISTS public.transaction_limits (
+    limit_id BIGSERIAL PRIMARY KEY,
+    transaction_type VARCHAR(40) NOT NULL UNIQUE,
+    minimum_amount NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (minimum_amount >= 0),
+    maximum_per_transaction NUMERIC(18,2) NOT NULL
+        CHECK (maximum_per_transaction > 0),
+    daily_amount_limit NUMERIC(18,2) NOT NULL
+        CHECK (daily_amount_limit > 0),
+    daily_transaction_count INTEGER
+        CHECK (daily_transaction_count IS NULL OR daily_transaction_count > 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE','INACTIVE')),
+    modified_on TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_transaction_limit_range
+        CHECK (maximum_per_transaction >= minimum_amount)
+);

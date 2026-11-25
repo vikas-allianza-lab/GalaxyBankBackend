@@ -20,8 +20,8 @@ public record ChequeBookRequest(
 
     @NotBlank(message = "Delivery option is required")
     @Pattern(
-        regexp = "(?i)HOME|BRANCH",
-        message = "Delivery must be HOME or BRANCH"
+        regexp = "(?i)BRANCH|PRIMARY_ADDRESS|DEFAULT_ADDRESS",
+        message = "Invalid delivery option"
     )
     String delivery
 

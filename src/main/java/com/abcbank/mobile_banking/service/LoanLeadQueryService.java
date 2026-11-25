@@ -9,7 +9,10 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.abcbank.mobile_banking.dto.request.LoanLeadRequest;
 
 @Service
 public class LoanLeadQueryService {
@@ -54,6 +57,9 @@ public class LoanLeadQueryService {
                 email,
                 product_code,
                 loan_amount,
+                tenure_months,
+                purpose,
+                security_value,
                 total_income,
                 total_exp,
                 eligibility,
@@ -91,6 +97,9 @@ public class LoanLeadQueryService {
                     email,
                     product_code,
                     loan_amount,
+                    tenure_months,
+                    purpose,
+                    security_value,
                     total_income,
                     total_exp,
                     eligibility,
@@ -117,6 +126,147 @@ public class LoanLeadQueryService {
                     "Loan application not found"
             );
         }
+    }
+
+    // LON-08: POST FRESH LOAN APPLICATION
+    @Transactional
+    public Map<String, Object> submitLoanApplication(
+            String customerNo,
+            LoanLeadRequest request) {
+
+        // 1. Validate customer number
+        if (customerNo == null || customerNo.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Customer login is required"
+            );
+        }
+
+        // 2. Get logged-in customer details
+        Map<String, Object> customer;
+
+        try {
+
+            customer = jdbc.queryForMap("""
+                SELECT
+                    user_id,
+                    customer_no,
+                    branch,
+                    mobile,
+                    email
+                FROM public."MB001001"
+                WHERE customer_no = ?
+                  AND status = 'ACTIVE'
+                """, customerNo);
+
+        } catch (EmptyResultDataAccessException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Active customer record not found"
+            );
+        }
+
+        Long createdBy =
+                ((Number) customer.get("user_id")).longValue();
+
+        String customerBranch =
+                String.valueOf(customer.get("branch"));
+
+        // 3. Map existing customer branch to branch master code
+        String branchCode;
+
+        if ("PUNE001".equalsIgnoreCase(customerBranch)) {
+            branchCode = "BR001";
+        } else if ("BR001".equalsIgnoreCase(customerBranch)
+                || "BR002".equalsIgnoreCase(customerBranch)
+                || "BR003".equalsIgnoreCase(customerBranch)) {
+            branchCode = customerBranch.toUpperCase();
+        } else {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Customer branch has no configured branch master mapping: "
+                            + customerBranch
+            );
+        }
+
+        // 4. Validate branch foreign key
+        Integer branchCount = jdbc.queryForObject("""
+            SELECT COUNT(*)
+            FROM public."MB002002"
+            WHERE branch_code = ?
+            """,
+            Integer.class,
+            branchCode
+        );
+
+        if (branchCount == null || branchCount == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid branch code: " + branchCode
+            );
+        }
+
+        // 5. Validate loan product
+        String productCode = request.productType()
+                .trim()
+                .toUpperCase();
+
+        // 6. Insert fresh loan application
+        Map<String, Object> application = jdbc.queryForMap("""
+            INSERT INTO public."MB004010" (
+                branch_code,
+                customer_no,
+                mobile,
+                email,
+                product_code,
+                loan_amount,
+                tenure_months,
+                purpose,
+                security_value,
+                total_income,
+                total_exp,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING
+                id AS request_id,
+                customer_no,
+                branch_code,
+                product_code,
+                loan_amount,
+                tenure_months,
+                purpose,
+                security_value,
+                total_income,
+                total_exp,
+                req_status,
+                created_on
+            """,
+
+            branchCode,
+            customerNo,
+            customer.get("mobile"),
+            customer.get("email"),
+            productCode,
+            request.amount(),
+            request.tenureMonths(),
+            request.purpose().trim(),
+            request.securityValue(),
+            request.totalIncome(),
+            request.householdExpense(),
+            createdBy
+        );
+
+        // 7. Prepare response
+        Map<String, Object> response = new LinkedHashMap<>();
+
+        response.put("customerNo", customerNo);
+        response.put("application", application);
+        response.put("message",
+                "Fresh loan application submitted successfully");
+
+        return response;
     }
 
     // LON-10: GET EXISTING LOAN HISTORY
