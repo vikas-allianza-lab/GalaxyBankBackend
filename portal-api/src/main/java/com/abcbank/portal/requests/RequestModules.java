@@ -98,6 +98,8 @@ public final class RequestModules {
                         str("ben_name", "beneficiary", "beneficiaryName").req().max(150),
                         str("ben_account", "beneficiaryAccount").req().mask().max(34).re(Pattern.compile("^[A-Za-z0-9]{6,34}$"), "Enter a valid beneficiary account number."),
                         str("ben_bank", "bank", "beneficiaryBank").max(150),
+                        str("ben_branch", "beneficiaryBranch", "beneficiaryBranchName").max(150),
+                        str("ben_mobile", "beneficiaryMobile", "beneficiaryMobileNo").re(MOBILE, "Enter a valid 10-digit beneficiary mobile number."),
                         str("ben_ifsc", "ifsc", "beneficiaryIfsc").req().upper().max(11).re(IFSC, "Enter a valid IFSC code (e.g. HDFC0001234)."),
                         dec("amount", "amount").req().min("0.01"),
                         str("remarks", "remarks").max(255),

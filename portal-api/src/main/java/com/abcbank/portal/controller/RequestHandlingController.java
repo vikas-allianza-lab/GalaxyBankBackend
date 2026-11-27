@@ -5,6 +5,8 @@ import com.abcbank.portal.requests.RequestModules;
 import com.abcbank.portal.requests.RequestModules.Field;
 import com.abcbank.portal.requests.RequestModules.Module;
 import com.abcbank.portal.requests.RequestModules.Resolve;
+import com.abcbank.portal.service.PaymentDocumentService;
+import com.abcbank.portal.service.RequestDocumentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -20,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Files;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -59,6 +65,8 @@ public class RequestHandlingController {
                     + "left join public.\"MB002002\" b on b.branch_code = %1$s.branch_code";
 
     private final JdbcTemplate db;
+    private final PaymentDocumentService paymentDocuments;
+    private final RequestDocumentService requestDocuments;
     private final Map<Long, Deque<Long>> writes = new ConcurrentHashMap<>();
     private volatile Map<String, Set<String>> columnCache;
     private volatile boolean auditReady;
@@ -70,7 +78,7 @@ public class RequestHandlingController {
     @Value("${portal.requests.writes-per-minute:60}")
     private int writesPerMinute;
 
-    public RequestHandlingController(JdbcTemplate db) { this.db = db; }
+    public RequestHandlingController(JdbcTemplate db, PaymentDocumentService paymentDocuments, RequestDocumentService requestDocuments) { this.db = db; this.paymentDocuments = paymentDocuments; this.requestDocuments = requestDocuments; }
 
     @PostConstruct
     void init() {
@@ -315,7 +323,43 @@ public class RequestHandlingController {
         List<Map<String, Object>> rows = db.queryForList(sql, args.toArray());
         if (rows.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "This request was already processed by someone else.");
         audit(who, http, "APPROVED".equals(decision) ? "AUTHORISE" : "REJECT", m, id, "PENDING", decision, remarks.isEmpty() ? null : remarks);
+        if ("rtgs-neft-imps".equals(m.key()) && "APPROVED".equals(decision)) {
+            try { paymentDocuments.generateAndEmail(id); }
+            catch (Exception documentError) { log.error("Payment verified, but PDF generation/email processing failed for request {}", id, documentError); }
+        } else if (requestDocuments.supports(m.key()) && "APPROVED".equals(decision)) {
+            // Every other request module: generate the verified form PDF, store it and email the customer.
+            try { requestDocuments.generateAndEmail(m.key(), id); }
+            catch (Exception documentError) { log.error("Request {} #{} verified, but PDF generation/email processing failed", m.key(), id, documentError); }
+        }
         return record(m, cols, rows.get(0), who, false);
+    }
+
+
+    // Payment verification PDF: available only after the request is authorised and scoped to the user's branch.
+    @GetMapping(value = "/{module}/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> paymentPdf(@PathVariable String module, @PathVariable long id, Authentication auth) {
+        Who who = who(auth);
+        Module m = module(module);
+        boolean payment = "rtgs-neft-imps".equals(m.key());
+        if (!payment && !requestDocuments.supports(m.key())) throw new ApiException(HttpStatus.BAD_REQUEST, "PDF is not available for this request type.");
+        Map<String,Object> row = loadRow(m, id, who);
+        if (!Set.of("APPROVED", "COMPLETED").contains(str(row.get("req_status")))) throw new ApiException(HttpStatus.CONFLICT, "The PDF is available after verification.");
+        Path file = payment ? paymentDocuments.find(id) : requestDocuments.find(m.key(), id);
+        boolean needsRegeneration = file == null;
+        if (file != null) {
+            try {
+                needsRegeneration = !Files.exists(file) || Files.size(file) < 500;
+            } catch (IOException fileCheckError) {
+                log.warn("Unable to validate existing payment PDF for request {}; regenerating", id, fileCheckError);
+                needsRegeneration = true;
+            }
+        }
+        if (needsRegeneration) {
+            try { file = payment ? paymentDocuments.generateAndEmail(id) : requestDocuments.generate(m.key(), id, false); }
+            catch (Exception generationError) { log.error("Unable to regenerate PDF for {} request {}", m.key(), id, generationError); throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate the PDF."); }
+        }
+        try { return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header("Content-Disposition", "inline; filename=" + file.getFileName()).body(Files.readAllBytes(file)); }
+        catch (Exception e) { throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to read the PDF."); }
     }
 
     // ------------------------------------------------------------------ cancel ("delete")
