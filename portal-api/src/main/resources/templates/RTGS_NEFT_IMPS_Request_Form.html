@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{formTitle}}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 10px 12px;
+    }
+
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 30px;
+      text-decoration: underline;
+    }
+
+    .to-section {
+      margin-bottom: 20px;
+    }
+
+    .date {
+      float: right;
+      margin-top: -2px;
+    }
+
+    .clearfix {
+      clear: both;
+    }
+
+    .subject {
+      margin: 20px 0;
+      font-weight: bold;
+    }
+
+    .body-text {
+      margin: 12px 0;
+      text-align: justify;
+    }
+
+    .mode {
+      margin: 18px 0 26px;
+      font-weight: bold;
+    }
+
+    .section-heading {
+      text-align: center;
+      font-weight: bold;
+      margin: 22px 0 14px;
+      text-decoration: underline;
+    }
+
+    .details {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    .details td {
+      padding: 5px 4px;
+      vertical-align: top;
+    }
+
+    .details .label {
+      width: 48%;
+    }
+
+    .details .colon {
+      width: 3%;
+      text-align: center;
+    }
+
+    .details .value {
+      width: 49%;
+      border-bottom: 1px solid #222;
+      min-height: 24px;
+    }
+
+    .authorization {
+      margin-top: 22px;
+      text-align: justify;
+    }
+
+    .signature-area {
+      margin-top: 36px;
+    }
+
+    .customer-signature {
+      text-align: right;
+      margin-top: 10px;
+    }
+
+    .office-use {
+      margin-top: 45px;
+    }
+
+    .office-title {
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .separator {
+      border-top: 1px solid #222;
+      margin: 5px 0 14px;
+    }
+
+    .office-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+      margin: 12px 0;
+    }
+
+    .office-item {
+      flex: 1;
+    }
+
+    .office-line {
+      display: inline-block;
+      min-width: 180px;
+      border-bottom: 1px solid #222;
+      height: 20px;
+      vertical-align: bottom;
+    }
+
+    .signature-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+    }
+
+    .signature-table td {
+      width: 50%;
+      text-align: center;
+      vertical-align: bottom;
+      padding: 0 25px;
+    }
+
+    .signature-line {
+      border-top: 1px solid #222;
+      margin-bottom: 5px;
+    }
+
+    .print-button {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 9px 16px;
+      border: 1px solid #555;
+      background: #fff;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      border-radius: 4px;
+    }
+
+    .print-button:hover {
+      background: #f2f2f2;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        max-width: none;
+        padding: 0;
+      }
+
+      .print-button {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="page">
+
+    <div class="title">
+      {{formTitle}}
+    </div>
+
+    <section class="to-section">
+      <div class="date">{{transactionDate}}</div>
+
+      <div>To,</div>
+      <div>The Branch Manager</div>
+      <div>{{bankName}}</div>
+      <div>{{branchName}}</div>
+    </section>
+
+    <div class="clearfix"></div>
+
+    <div class="subject">
+      Re : {{applicationSubject}}
+    </div>
+
+    <p class="body-text">Sir,</p>
+
+    <p class="body-text">
+      I am willing to transfer funds from my Account No.
+      <strong>{{accountNumber}}</strong> with your
+      <strong>{{branchName}}</strong>.
+      Details of which are mentioned below :
+    </p>
+
+    <div class="mode">
+      Transfer Mode : {{transferMode}}
+    </div>
+
+    <div class="section-heading">
+      BENEFICIARY DETAILS
+    </div>
+
+    <table class="details">
+      <tr>
+        <td class="label">Name of the Beneficiary</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryName}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Account Number of the Beneficiary</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryAccountNumber}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">IFSC Code No</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryIfsc}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Bank Name</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryBankName}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Branch Name</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryBranchName}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Mobile No of the Beneficiary</td>
+        <td class="colon">:</td>
+        <td class="value">{{beneficiaryMobile}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Amount to be remitted</td>
+        <td class="colon">:</td>
+        <td class="value">{{amount}}</td>
+      </tr>
+    </table>
+
+    <p class="authorization">
+      I authorized the Bank to debit my above mentioned account with the required charges as
+      applicable.
+    </p>
+
+    <div class="signature-area">
+      <div>Yours faithfully,</div>
+
+      <div class="customer-signature">
+        <strong>{{customerName}}</strong><br />
+        {{mobileNumber}}
+      </div>
+    </div>
+
+    <section class="office-use">
+      <div class="office-title">For Office Use only</div>
+      <div class="separator"></div>
+
+      <div class="office-row">
+        <div class="office-item">
+          Transaction No :
+          <span class="office-line">{{transactionNumber}}</span>
+        </div>
+
+        <div class="office-item">
+          Transaction Date :
+          <span class="office-line">{{officeTransactionDate}}</span>
+        </div>
+      </div>
+
+      <div class="office-row">
+        <div class="office-item">
+          Maker Staff Emp No
+          <span class="office-line">{{makerEmployeeNumber}}</span>
+        </div>
+
+        <div class="office-item">
+          Checker Staff Emp No
+          <span class="office-line">{{checkerEmployeeNumber}}</span>
+        </div>
+      </div>
+
+      <table class="signature-table">
+        <tr>
+          <td>
+            <div class="signature-line"></div>
+            Maker Staff Signature
+          </td>
+
+          <td>
+            <div class="signature-line"></div>
+            Checker Staff Signature
+          </td>
+        </tr>
+      </table>
+    </section>
+
+  </main>
+</body>
+</html>

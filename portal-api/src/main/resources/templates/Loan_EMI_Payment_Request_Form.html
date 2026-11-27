@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loan EMI Payment Request Form</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 10px 12px;
+    }
+
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 30px;
+      text-decoration: underline;
+    }
+
+    .to-section {
+      margin-bottom: 20px;
+    }
+
+    .date {
+      float: right;
+      margin-top: -2px;
+    }
+
+    .clearfix {
+      clear: both;
+    }
+
+    .subject {
+      margin: 20px 0;
+      font-weight: bold;
+    }
+
+    .body-text {
+      margin: 12px 0;
+      text-align: justify;
+    }
+
+    .mode {
+      margin: 18px 0 26px;
+      font-weight: bold;
+    }
+
+    .section-heading {
+      text-align: center;
+      font-weight: bold;
+      margin: 22px 0 14px;
+      text-decoration: underline;
+    }
+
+    .details {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    .details td {
+      padding: 5px 4px;
+      vertical-align: top;
+    }
+
+    .details .label {
+      width: 48%;
+    }
+
+    .details .colon {
+      width: 3%;
+      text-align: center;
+    }
+
+    .details .value {
+      width: 49%;
+      border-bottom: 1px solid #222;
+      min-height: 24px;
+    }
+
+    .authorization {
+      margin-top: 22px;
+      text-align: justify;
+    }
+
+    .signature-area {
+      margin-top: 36px;
+    }
+
+    .customer-signature {
+      text-align: right;
+      margin-top: 10px;
+    }
+
+    .office-use {
+      margin-top: 45px;
+    }
+
+    .office-title {
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .separator {
+      border-top: 1px solid #222;
+      margin: 5px 0 14px;
+    }
+
+    .office-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+      margin: 12px 0;
+    }
+
+    .office-item {
+      flex: 1;
+    }
+
+    .office-line {
+      display: inline-block;
+      min-width: 180px;
+      border-bottom: 1px solid #222;
+      height: 20px;
+      vertical-align: bottom;
+    }
+
+    .signature-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+    }
+
+    .signature-table td {
+      width: 50%;
+      text-align: center;
+      vertical-align: bottom;
+      padding: 0 25px;
+    }
+
+    .signature-line {
+      border-top: 1px solid #222;
+      margin-bottom: 5px;
+    }
+
+    .print-button {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 9px 16px;
+      border: 1px solid #555;
+      background: #fff;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      border-radius: 4px;
+    }
+
+    .print-button:hover {
+      background: #f2f2f2;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        max-width: none;
+        padding: 0;
+      }
+
+      .print-button {
+        display: none;
+      }
+    }
+  
+    .note {
+      margin: 14px 0;
+      font-size: 13px;
+      text-align: justify;
+    }
+
+    .terms {
+      margin: 8px 0 16px 18px;
+      padding: 0;
+    }
+
+    .terms li {
+      margin: 4px 0;
+      text-align: justify;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="page">
+
+    <div class="title">
+      Loan EMI Payment Request Form
+    </div>
+
+    <section class="to-section">
+      <div class="date">{{transactionDate}}</div>
+
+      <div>To,</div>
+      <div>The Branch Manager</div>
+      <div>{{bankName}}</div>
+      <div>{{branchName}}</div>
+    </section>
+
+    <div class="clearfix"></div>
+
+    <div class="subject">
+      Re : Request for Payment of Loan EMI
+    </div>
+
+    <p class="body-text">Sir,</p>
+
+    <p class="body-text">
+      I request you to debit my Account No. <strong>{{accountNumber}}</strong> with your <strong>{{branchName}}</strong> towards payment of the EMI of my loan account mentioned below :
+    </p>
+
+    <div class="section-heading">
+      LOAN ACCOUNT DETAILS
+    </div>
+
+    <table class="details">
+      <tr>
+        <td class="label">Loan Account Number</td>
+        <td class="colon">:</td>
+        <td class="value">{{loanAccountNumber}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Loan Account Name</td>
+        <td class="colon">:</td>
+        <td class="value">{{loanAccountName}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Loan Account Status</td>
+        <td class="colon">:</td>
+        <td class="value">{{loanAccountStatus}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Loan Expiry Date</td>
+        <td class="colon">:</td>
+        <td class="value">{{expiryDate}}</td>
+      </tr>
+    </table>
+
+    <div class="section-heading">
+      PAYMENT DETAILS
+    </div>
+
+    <table class="details">
+      <tr>
+        <td class="label">EMI Amount to be Paid</td>
+        <td class="colon">:</td>
+        <td class="value">{{emiAmount}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Instalment Amount</td>
+        <td class="colon">:</td>
+        <td class="value">{{instalmentAmount}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Total Outstanding</td>
+        <td class="colon">:</td>
+        <td class="value">{{totalOutstanding}}</td>
+      </tr>
+
+      <tr>
+        <td class="label">Interest Outstanding</td>
+        <td class="colon">:</td>
+        <td class="value">{{interestOutstanding}}</td>
+      </tr>
+    </table>
+
+    <p class="authorization">
+      I authorize the Bank to debit my above mentioned account with the EMI amount and to credit it to the loan account mentioned above, along with the charges as applicable.
+    </p>
+
+    <div class="signature-area">
+      <div>Yours faithfully,</div>
+
+      <div class="customer-signature">
+        <strong>{{customerName}}</strong><br />
+        {{mobileNumber}}
+      </div>
+    </div>
+
+    <section class="office-use">
+      <div class="office-title">For Office Use only</div>
+      <div class="separator"></div>
+
+      <div class="office-row">
+        <div class="office-item">
+          Transaction No :
+          <span class="office-line">{{transactionNumber}}</span>
+        </div>
+
+        <div class="office-item">
+          Transaction Date :
+          <span class="office-line">{{officeTransactionDate}}</span>
+        </div>
+      </div>
+
+      <div class="office-row">
+        <div class="office-item">
+          Maker Staff Emp No
+          <span class="office-line">{{makerEmployeeNumber}}</span>
+        </div>
+
+        <div class="office-item">
+          Checker Staff Emp No
+          <span class="office-line">{{checkerEmployeeNumber}}</span>
+        </div>
+      </div>
+
+      <table class="signature-table">
+        <tr>
+          <td>
+            <div class="signature-line"></div>
+            Maker Staff Signature
+          </td>
+
+          <td>
+            <div class="signature-line"></div>
+            Checker Staff Signature
+          </td>
+        </tr>
+      </table>
+    </section>
+
+  </main>
+</body>
+</html>
