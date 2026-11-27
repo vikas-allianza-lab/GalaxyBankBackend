@@ -20,6 +20,7 @@ public class BeneficiaryOtpService {
 
     private final BeneficiaryRepository repository;
     private final JavaMailSender mailSender;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${spring.mail.username}")
@@ -33,23 +34,34 @@ public class BeneficiaryOtpService {
         this.mailSender = mailSender;
     }
 
-    // Generate OTP, save hash and send email
+    // Generate OTP, save hash and send to customer's registered email
     @Transactional
     public void generateAndSendOtp(
             Long beneficiaryId,
             String customerNo,
-            String beneficiaryEmail) {
+            String customerRegisteredEmail) {
 
+        if (customerRegisteredEmail == null
+                || customerRegisteredEmail.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Customer registered email address is required");
+        }
+
+        // Generate six-digit OTP
         String otp = String.format(
                 "%06d",
                 secureRandom.nextInt(1_000_000)
         );
 
+        // Hash OTP before storing in database
         String otpHash = hashOtp(otp);
 
+        // OTP validity: 5 minutes
         OffsetDateTime expiresAt =
                 OffsetDateTime.now().plusMinutes(5);
 
+        // Save OTP hash
         repository.saveOtp(
                 beneficiaryId,
                 customerNo,
@@ -57,7 +69,8 @@ public class BeneficiaryOtpService {
                 expiresAt
         );
 
-        sendEmail(beneficiaryEmail, otp);
+        // Send OTP to customer's registered email
+        sendEmail(customerRegisteredEmail, otp);
     }
 
     // Verify OTP
@@ -67,7 +80,9 @@ public class BeneficiaryOtpService {
             String customerNo,
             String enteredOtp) {
 
-        if (enteredOtp == null || !enteredOtp.matches("\\d{6}")) {
+        if (enteredOtp == null
+                || !enteredOtp.matches("\\d{6}")) {
+
             return false;
         }
 
@@ -137,15 +152,16 @@ public class BeneficiaryOtpService {
         }
     }
 
-    // Send OTP email
+    // Send OTP email to customer's registered email
     private void sendEmail(
-            String beneficiaryEmail,
+            String customerRegisteredEmail,
             String otp) {
 
         SimpleMailMessage message = new SimpleMailMessage();
 
         message.setFrom(senderEmail);
-        message.setTo(beneficiaryEmail);
+        message.setTo(customerRegisteredEmail);
+
         message.setSubject(
                 "ABC Bank - Beneficiary Verification OTP"
         );
@@ -156,6 +172,8 @@ public class BeneficiaryOtpService {
                 + otp
                 + "\n\nThis OTP is valid for 5 minutes."
                 + "\nDo not share this OTP with anyone."
+                + "\n\nIf you did not request this beneficiary addition, "
+                + "please contact ABC Bank immediately."
                 + "\n\nRegards,\nABC Bank"
         );
 

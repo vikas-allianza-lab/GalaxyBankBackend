@@ -7,6 +7,9 @@ import java.security.SecureRandom;
 import java.time.Instant;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +42,10 @@ public class RegistrationService {
     private final PasswordEncoder encoder;
     private final OtpDeliveryService otpDelivery;
     private final JwtService jwt;
+    private final JdbcTemplate jdbc;
+
+    @Value("${app.otp.delivery-mode:CONSOLE}")
+    private String otpDeliveryMode;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -49,7 +56,8 @@ public class RegistrationService {
             MpinCredentialRepository mpinCredentials,
             PasswordEncoder encoder,
             OtpDeliveryService otpDelivery,
-            JwtService jwt) {
+            JwtService jwt,
+            JdbcTemplate jdbc) {
 
         this.customers = customers;
         this.challenges = challenges;
@@ -58,6 +66,7 @@ public class RegistrationService {
         this.encoder = encoder;
         this.otpDelivery = otpDelivery;
         this.jwt = jwt;
+        this.jdbc = jdbc;
     }
 
     // STEP 1: Start registration
@@ -106,13 +115,22 @@ public class RegistrationService {
                 )
         );
 
-        otpDelivery.sendOtp(
-                customer.getRegisteredMobile(), otp
-        );
+        // Email is read from the existing customer user-master table.
+        String registeredEmail = getRegisteredEmail(request.customerId());
+
+        // Both delivery methods receive the SAME OTP generated above.
+        // CONSOLE mode simulates SMS locally; MSG91 mode sends a real SMS.
+        otpDelivery.sendEmailOtp(registeredEmail, otp);
+        otpDelivery.sendOtp(customer.getRegisteredMobile(), otp);
+
+        String deliveryMessage = "MSG91".equalsIgnoreCase(otpDeliveryMode)
+                ? "OTP sent to your registered email and mobile number."
+                : "OTP sent to your registered email. SMS is simulated in the local console (development only).";
 
         return new RegistrationStartResponse(
-                "If the details are eligible, an OTP has been sent to the registered mobile number.",
+                deliveryMessage,
                 mask(customer.getRegisteredMobile()),
+                maskEmail(registeredEmail),
                 OTP_TTL_SECONDS
         );
     }
@@ -238,6 +256,36 @@ public class RegistrationService {
                 customerId,
                 "ACTIVE"
         );
+    }
+
+
+    private String getRegisteredEmail(String customerId) {
+        try {
+            String email = jdbc.queryForObject("""
+                    SELECT email
+                      FROM public."MB001001"
+                     WHERE customer_no = ?
+                       AND user_type = 'CU'
+                       AND email IS NOT NULL
+                       AND TRIM(email) <> ''
+                    """, String.class, customerId);
+            if (email == null || email.isBlank()) {
+                throw new IllegalArgumentException("Registered email address not found.");
+            }
+            return email.trim();
+        } catch (EmptyResultDataAccessException ex) {
+            throw new IllegalArgumentException("Registered email address not found.");
+        }
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return "****";
+        String[] parts = email.split("@", 2);
+        String local = parts[0];
+        String masked = local.length() <= 2
+                ? local.charAt(0) + "*"
+                : local.substring(0, 2) + "****";
+        return masked + "@" + parts[1];
     }
 
     private String normalize(String value) {

@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.abcbank.mobile_banking.dto.request.EmiPaymentRequest;
 import com.abcbank.mobile_banking.dto.request.LoanLeadRequest;
 import com.abcbank.mobile_banking.service.LoanLeadQueryService;
+import com.abcbank.mobile_banking.service.LoanPaymentService;
 
 import jakarta.validation.Valid;
 
@@ -24,9 +26,13 @@ import jakarta.validation.Valid;
 public class LoanLeadQueryController {
 
     private final LoanLeadQueryService service;
+    private final LoanPaymentService loanPaymentService;
 
-    public LoanLeadQueryController(LoanLeadQueryService service) {
+    public LoanLeadQueryController(
+            LoanLeadQueryService service,
+            LoanPaymentService loanPaymentService) {
         this.service = service;
+        this.loanPaymentService = loanPaymentService;
     }
 
     // Validate logged-in customer
@@ -77,6 +83,24 @@ public class LoanLeadQueryController {
         );
     }
 
+    // EMI-03: Create EMI payment request
+    @PostMapping("/emi-payments")
+    public ResponseEntity<Map<String, Object>> createEmiPayment(
+            Authentication authentication,
+            @Valid @RequestBody EmiPaymentRequest request) {
+
+        String customerNo = getCustomerNo(authentication);
+
+        Map<String, Object> response =
+                loanPaymentService.createEmiPayment(
+                        customerNo,
+                        request
+                );
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(response);
+    }
+
     // Get previously used loan product codes
     @GetMapping("/product-codes")
     public ResponseEntity<Map<String, Object>> getProductCodes(
@@ -104,17 +128,6 @@ public class LoanLeadQueryController {
             @Valid @RequestBody LoanLeadRequest request) {
 
         String authenticatedCustomerNo = getCustomerNo(authentication);
-
-        // Ensure request customer matches logged-in customer
-        if (request.customerNo() == null
-                || !authenticatedCustomerNo.equalsIgnoreCase(
-                        request.customerNo().trim())) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Customer number does not match logged-in customer."
-            );
-        }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 service.submitLoanApplication(

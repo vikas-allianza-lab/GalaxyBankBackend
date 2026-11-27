@@ -24,24 +24,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(s ->
-                        s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        s.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(a -> a
 
+                        // Public APIs
                         .requestMatchers(
                                 "/api/v1/registration/start",
                                 "/api/v1/registration/verify-otp",
                                 "/actuator/health"
                         ).permitAll()
-
-                        .requestMatchers("/api/v1/notifications/**")
-                        .hasRole("CUSTOMER")
-
-                        .requestMatchers(
-                                "/api/v1/grievances/**",
-                                "/api/v1/branches/**"
-                        ).permitAll()
-
 
                         .requestMatchers(
                                 "/api/v1/auth/web/login",
@@ -51,36 +44,43 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-mpin/verify-otp"
                         ).permitAll()
 
-                        .requestMatchers("/api/v1/auth/forgot-mpin/reset")
-                        .hasAuthority("SCOPE_mpin:reset")
+                        // Public branches and grievances
+                        .requestMatchers(
+                                "/api/v1/grievances/**",
+                                "/api/v1/branches/**"
+                        ).permitAll()
 
-                        .requestMatchers("/api/v1/registration/complete")
-                        .hasAuthority("SCOPE_registration:complete")
+                        // Scope-based APIs
+                        .requestMatchers(
+                                "/api/v1/auth/forgot-mpin/reset"
+                        ).hasAuthority("SCOPE_mpin:reset")
 
-                        .requestMatchers("/api/v1/transfers/**")
-                        .hasAuthority("SCOPE_fund:transfer")
+                        .requestMatchers(
+                                "/api/v1/registration/complete"
+                        ).hasAuthority("SCOPE_registration:complete")
 
-                        .requestMatchers("/api/v1/requests/stop-payment")
-                        .hasAuthority("SCOPE_fund:transfer")
+                        .requestMatchers(
+                                "/api/v1/transfers/**"
+                        ).hasAuthority("SCOPE_fund:transfer")
 
-                        .requestMatchers("/api/v1/deposits/**")
-                        .hasRole("CUSTOMER")
+                        .requestMatchers(
+                                "/api/v1/requests/stop-payment"
+                        ).hasAuthority("SCOPE_fund:transfer")
 
-                        .requestMatchers("/api/v1/locker/**")
-                        .hasRole("CUSTOMER")
+                        // Customer APIs
+                        .requestMatchers(
+                                "/api/v1/notifications/**",
+                                "/api/v1/deposits/**",
+                                "/api/v1/locker/**",
+                                "/api/v1/beneficiaries",
+                                "/api/v1/beneficiaries/**",
+                                "/api/v1/positive-pay/**",
+                                "/api/v1/customers/**",
+                                "/api/v1/customer-360",
+                                "/api/v1/accounts/**"
+                        ).hasRole("CUSTOMER")
 
-                        // Beneficiary APIs
-                        .requestMatchers("/api/v1/beneficiaries/**")
-                        .hasRole("CUSTOMER")
-
-                           .requestMatchers("/api/v1/positive-pay/**")
-.hasRole("CUSTOMER")
-
-                        .requestMatchers("/api/v1/customers/**", 
-                        "/api/v1/customer-360", "/api/v1/accounts/**")
-                        .hasRole("CUSTOMER")
-                       
-
+                        // All other APIs require authentication
                         .anyRequest().authenticated()
                 )
 

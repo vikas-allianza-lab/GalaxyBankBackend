@@ -13,12 +13,8 @@ import com.abcbank.mobile_banking.dto.request.BeneficiaryRequest;
 import com.abcbank.mobile_banking.dto.response.BeneficiaryResponse;
 import com.abcbank.mobile_banking.repository.BeneficiaryRepository;
 
-
 @Service
 public class BeneficiaryService {
-
-    private static final BigDecimal MAX_TRANSACTION_LIMIT =
-            new BigDecimal("50000.00");
 
     private final BeneficiaryRepository repository;
     private final BeneficiaryOtpService otpService;
@@ -26,30 +22,43 @@ public class BeneficiaryService {
     public BeneficiaryService(
             BeneficiaryRepository repository,
             BeneficiaryOtpService otpService) {
+
         this.repository = repository;
         this.otpService = otpService;
     }
 
+    // Add beneficiary and send OTP to customer's registered email
     @Transactional
     public String addBeneficiary(
             BeneficiaryRequest request,
             String customerNo,
             Long userId) {
 
+        // Beneficiary email is required and will be saved as beneficiary details.
         if (request.beneficiaryEmail() == null
                 || request.beneficiaryEmail().isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Beneficiary email is required for OTP verification");
+                    "Beneficiary email is required");
         }
 
-        if (request.singleTransactionLimit()
-                .compareTo(MAX_TRANSACTION_LIMIT) > 0) {
+        // Validate transaction limit
+        if (request.singleTransactionLimit() == null
+                || request.singleTransactionLimit()
+                        .compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Maximum single transaction limit is Rs. 50,000");
+                    "Single transaction limit must be greater than zero");
         }
 
+        // Get customer's registered email from MB001001.
+        // Do not use beneficiaryEmail as the OTP recipient.
+        String customerEmail =
+                repository.findCustomerRegisteredEmail(customerNo);
+
+        // Save beneficiary with PENDING status
         Long beneficiaryId = repository.saveBeneficiary(
                 request.branchCode(),
                 customerNo,
@@ -61,12 +70,16 @@ public class BeneficiaryService {
                 request.beneficiaryEmail(),
                 userId);
 
+        // Send OTP to customer's registered email
         otpService.generateAndSendOtp(
-                beneficiaryId, customerNo, request.beneficiaryEmail());
+                beneficiaryId,
+                customerNo,
+                customerEmail);
 
-        return "Beneficiary submitted successfully. OTP sent to beneficiary email.";
+        return "Beneficiary submitted successfully. OTP sent to customer's registered email.";
     }
 
+    // Verify beneficiary OTP
     @Transactional
     public String verifyBeneficiaryOtp(
             Long beneficiaryId,
@@ -76,21 +89,27 @@ public class BeneficiaryService {
         BeneficiaryResponse beneficiary = repository
                 .findByIdAndCustomer(beneficiaryId, customerNo)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Beneficiary not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Beneficiary not found"));
 
         if (beneficiary.verified()) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Beneficiary is already verified");
+                    HttpStatus.BAD_REQUEST,
+                    "Beneficiary is already verified");
         }
 
-        if (!repository.isPendingBeneficiary(beneficiaryId, customerNo)) {
+        if (!repository.isPendingBeneficiary(
+                beneficiaryId, customerNo)) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Only pending beneficiaries can be verified");
         }
 
         boolean verified = otpService.verifyOtp(
-                beneficiaryId, customerNo, otp);
+                beneficiaryId,
+                customerNo,
+                otp);
 
         if (!verified) {
             throw new ResponseStatusException(
@@ -98,15 +117,22 @@ public class BeneficiaryService {
                     "Invalid or expired OTP. Maximum 5 attempts allowed.");
         }
 
-        repository.activateBeneficiary(beneficiaryId, customerNo);
+        // Activate beneficiary after successful OTP verification
+        repository.activateBeneficiary(
+                beneficiaryId,
+                customerNo);
 
         return "Beneficiary verified successfully.";
     }
 
-    public List<BeneficiaryResponse> getBeneficiaries(String customerNo) {
+    // Get all customer beneficiaries
+    public List<BeneficiaryResponse> getBeneficiaries(
+            String customerNo) {
+
         return repository.findAllByCustomer(customerNo);
     }
 
+    // Update beneficiary
     @Transactional
     public String updateBeneficiary(
             Long beneficiaryId,
@@ -117,7 +143,8 @@ public class BeneficiaryService {
         BeneficiaryResponse beneficiary = repository
                 .findByIdAndCustomer(beneficiaryId, customerNo)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Beneficiary not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Beneficiary not found"));
 
         if (!beneficiary.active() || !beneficiary.verified()) {
             throw new ResponseStatusException(
@@ -125,11 +152,13 @@ public class BeneficiaryService {
                     "Only active, verified beneficiaries can be updated");
         }
 
-        if (singleTransactionLimit.compareTo(BigDecimal.ZERO) <= 0
-                || singleTransactionLimit.compareTo(MAX_TRANSACTION_LIMIT) > 0) {
+        // Validate transaction limit
+        if (singleTransactionLimit == null
+                || singleTransactionLimit.compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Transaction limit must be between Rs. 0.01 and Rs. 50,000");
+                    "Transaction limit must be greater than zero");
         }
 
         int updated = repository.updateBeneficiaryDetails(
@@ -147,6 +176,7 @@ public class BeneficiaryService {
         return "Beneficiary updated successfully.";
     }
 
+    // Deactivate beneficiary
     @Transactional
     public String deactivateBeneficiary(
             Long beneficiaryId,
@@ -155,7 +185,8 @@ public class BeneficiaryService {
         BeneficiaryResponse beneficiary = repository
                 .findByIdAndCustomer(beneficiaryId, customerNo)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Beneficiary not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Beneficiary not found"));
 
         if (!beneficiary.active()) {
             throw new ResponseStatusException(
@@ -163,7 +194,9 @@ public class BeneficiaryService {
                     "Beneficiary is already inactive");
         }
 
-        repository.deactivateBeneficiary(beneficiaryId, customerNo);
+        repository.deactivateBeneficiary(
+                beneficiaryId,
+                customerNo);
 
         return "Beneficiary deleted successfully.";
     }

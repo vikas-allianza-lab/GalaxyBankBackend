@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.security;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -32,6 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public JwtAuthenticationFilter(
             JwtService jwtService,
             JdbcTemplate jdbc) {
+
         this.jwtService = jwtService;
         this.jdbc = jdbc;
     }
@@ -48,38 +51,54 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         log.info("JWT DEBUG: Request URL: {}", request.getRequestURI());
 
         if (header == null || !header.startsWith("Bearer ")) {
+
             log.warn("JWT DEBUG: Bearer token missing");
+
+            chain.doFilter(request, response);
+            return;
         }
 
-        if (header != null
-                && header.startsWith("Bearer ")
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            chain.doFilter(request, response);
+            return;
+        }
 
-            try {
-                String token = header.substring(7).trim();
+        try {
 
-                Claims claims = jwtService.parse(token);
+            String token = header.substring(7).trim();
 
-                String subject = claims.getSubject();
-                String userType = claims.get("user_type", String.class);
-                String scope = claims.get("scope", String.class);
+            Claims claims = jwtService.parse(token);
 
-                log.info("JWT DEBUG subject: {}", subject);
-                log.info("JWT DEBUG user_type: {}", userType);
-                log.info("JWT DEBUG scope: {}", scope);
+            String subject = claims.getSubject();
+            String userType = claims.get("user_type", String.class);
+            String scope = claims.get("scope", String.class);
 
-                if (subject != null
-                        && !subject.isBlank()
-                        && "CU".equals(userType)) {
+            log.info("JWT DEBUG subject: {}", subject);
+            log.info("JWT DEBUG user_type: {}", userType);
+            log.info("JWT DEBUG scope: {}", scope);
 
-                    List<SimpleGrantedAuthority> authorities =
-                            new ArrayList<>();
+            if (subject == null || subject.isBlank()) {
+                log.warn("JWT DEBUG: Subject is missing");
+                SecurityContextHolder.clearContext();
 
-                    // Customer role
-                    authorities.add(
-                            new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+            } else if (!"CU".equals(userType)) {
 
-                    // Token scope authorities
+                log.warn(
+                        "JWT DEBUG: Not a customer token. user_type={}",
+                        userType);
+
+                SecurityContextHolder.clearContext();
+
+            } else {
+
+                List<SimpleGrantedAuthority> authorities =
+                        new ArrayList<>();
+
+                authorities.add(
+                        new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+
+                if (scope != null) {
+
                     if ("registration:complete".equals(scope)) {
 
                         authorities.add(
@@ -99,30 +118,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 new SimpleGrantedAuthority(
                                         "SCOPE_fund:transfer"));
                     }
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    subject,
-                                    null,
-                                    authorities);
-
-                    SecurityContextHolder.getContext()
-                            .setAuthentication(authentication);
-
-                    log.info("JWT DEBUG: Customer authentication accepted");
-                    log.info("JWT DEBUG: Authorities: {}", authorities);
-
-                } else {
-
-                    log.warn(
-                            "JWT DEBUG: Authentication rejected. subject={}, userType={}",
-                            subject,
-                            userType);
                 }
 
-            } catch (JwtException | IllegalArgumentException ex) {
-                SecurityContextHolder.clearContext();
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                subject,
+                                null,
+                                authorities);
+
+                SecurityContextHolder.getContext()
+                        .setAuthentication(authentication);
+
+                log.info("JWT DEBUG: Customer authentication accepted");
+                log.info("JWT DEBUG: Authorities: {}", authorities);
             }
+
+        } catch (ExpiredJwtException ex) {
+
+            SecurityContextHolder.clearContext();
+
+            log.warn("JWT DEBUG: Token expired");
+
+        } catch (JwtException | IllegalArgumentException ex) {
+
+            SecurityContextHolder.clearContext();
+
+            log.error("JWT DEBUG: Invalid JWT: {}", ex.getMessage());
         }
 
         chain.doFilter(request, response);

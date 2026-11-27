@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.service;
 
 import java.security.SecureRandom;
@@ -25,20 +26,21 @@ import com.abcbank.mobile_banking.security.JwtService;
 
 /**
  * Forgot-MPIN flow
- *   1. requestOtp : 4-digit OTP sent to the registered mobile
- *   2. verifyOtp  : OTP checked -> short-lived "mpin:reset" token
- *   3. resetMpin  : new MPIN + confirm MPIN saved to MB001003
+ * 1. requestOtp : 4-digit OTP sent to the registered mobile
+ * 2. verifyOtp  : OTP checked -> short-lived "mpin:reset" token
+ * 3. resetMpin  : new MPIN + confirm MPIN saved to MB001003
  */
 @Service
 public class MpinResetService {
 
     private static final int OTP_TTL_SECONDS = 300;
     private static final int RESET_WINDOW_SECONDS = 300;
-    private static final int MAX_OTP_ATTEMPTS = 3;          // only 10,000 possible 4-digit OTPs
+    private static final int MAX_OTP_ATTEMPTS = 3;
     private static final int RESEND_COOLDOWN_SECONDS = 60;
 
     private static final String SENT_MESSAGE =
             "If the details are eligible, an OTP has been sent to the registered mobile number.";
+
     private static final String INVALID_OTP = "OTP is invalid or expired.";
 
     private final CustomerRegistryRepository customers;
@@ -51,13 +53,15 @@ public class MpinResetService {
 
     private final SecureRandom random = new SecureRandom();
 
-    public MpinResetService(CustomerRegistryRepository customers,
-                            MobileBankingUserRepository mobileUsers,
-                            MpinResetChallengeRepository challenges,
-                            PasswordEncoder encoder,
-                            OtpDeliveryService otpDelivery,
-                            JwtService jwt,
-                            JdbcTemplate jdbc) {
+    public MpinResetService(
+            CustomerRegistryRepository customers,
+            MobileBankingUserRepository mobileUsers,
+            MpinResetChallengeRepository challenges,
+            PasswordEncoder encoder,
+            OtpDeliveryService otpDelivery,
+            JwtService jwt,
+            JdbcTemplate jdbc) {
+
         this.customers = customers;
         this.mobileUsers = mobileUsers;
         this.challenges = challenges;
@@ -67,7 +71,7 @@ public class MpinResetService {
         this.jdbc = jdbc;
     }
 
-    // STEP 1: "Forgot MPIN" -> send 4-digit OTP
+    // STEP 1: Forgot MPIN -> send 4-digit OTP
     @Transactional
     public RegistrationStartResponse requestOtp(ForgotMpinRequest request) {
 
@@ -76,11 +80,13 @@ public class MpinResetService {
         Optional<CustomerRegistry> customer = customers.findById(customerId)
                 .filter(CustomerRegistry::isEligibleForMobileBanking);
 
-        // Same response for unknown / not-registered customers (no customer-ID probing).
+        // Same response for unknown / not-registered customers.
         if (customer.isEmpty() || !mobileUsers.existsByCustomerId(customerId)) {
+
             return new RegistrationStartResponse(
                     SENT_MESSAGE,
                     "******" + String.format("%04d", random.nextInt(10_000)),
+                    null,
                     OTP_TTL_SECONDS);
         }
 
@@ -89,12 +95,18 @@ public class MpinResetService {
         Optional<MpinResetChallenge> latest =
                 challenges.findTopByCustomerIdAndConsumedFalseOrderByCreatedAtDesc(customerId);
 
-        // Resend cool-down: keep the OTP already sent, do not send another one yet.
+        // Resend cooldown: retain the OTP already sent.
         if (latest.isPresent()
                 && !latest.get().isVerified()
                 && latest.get().getExpiresAt().isAfter(Instant.now())
-                && latest.get().getCreatedAt().isAfter(Instant.now().minusSeconds(RESEND_COOLDOWN_SECONDS))) {
-            return new RegistrationStartResponse(SENT_MESSAGE, mask(mobile), OTP_TTL_SECONDS);
+                && latest.get().getCreatedAt()
+                        .isAfter(Instant.now().minusSeconds(RESEND_COOLDOWN_SECONDS))) {
+
+            return new RegistrationStartResponse(
+                    SENT_MESSAGE,
+                    mask(mobile),
+                    null,
+                    OTP_TTL_SECONDS);
         }
 
         latest.ifPresent(MpinResetChallenge::consume);
@@ -108,10 +120,14 @@ public class MpinResetService {
 
         otpDelivery.sendOtp(mobile, otp);
 
-        return new RegistrationStartResponse(SENT_MESSAGE, mask(mobile), OTP_TTL_SECONDS);
+        return new RegistrationStartResponse(
+                SENT_MESSAGE,
+                mask(mobile),
+                null,
+                OTP_TTL_SECONDS);
     }
 
-    // STEP 2: "Submit OTP" -> short-lived reset token
+    // STEP 2: Submit OTP -> short-lived reset token
     @Transactional(noRollbackFor = IllegalArgumentException.class)
     public RegistrationTokenResponse verifyOtp(VerifyMpinResetOtpRequest request) {
 
@@ -124,6 +140,7 @@ public class MpinResetService {
 
         if (challenge.getAttempts() >= MAX_OTP_ATTEMPTS
                 || challenge.getExpiresAt().isBefore(Instant.now())) {
+
             challenge.consume();
             throw new IllegalArgumentException(INVALID_OTP);
         }
@@ -131,13 +148,16 @@ public class MpinResetService {
         challenge.incrementAttempts();
 
         if (!encoder.matches(request.otp(), challenge.getOtpHash())) {
+
             if (challenge.getAttempts() >= MAX_OTP_ATTEMPTS) {
                 challenge.consume();
             }
+
             throw new IllegalArgumentException(INVALID_OTP);
         }
 
-        challenge.startResetWindow(Instant.now().plusSeconds(RESET_WINDOW_SECONDS));
+        challenge.startResetWindow(
+                Instant.now().plusSeconds(RESET_WINDOW_SECONDS));
 
         return new RegistrationTokenResponse(
                 "OTP verified. Use this short-lived token only to set a new MPIN.",
@@ -148,15 +168,18 @@ public class MpinResetService {
                 "CU");
     }
 
-    // STEP 3: "Enter new MPIN + Confirm MPIN" -> save
+    // STEP 3: Enter new MPIN + Confirm MPIN -> save
     @Transactional
-    public MessageResponse resetMpin(String customerId, RegistrationCompleteRequest request) {
+    public MessageResponse resetMpin(
+            String customerId,
+            RegistrationCompleteRequest request) {
 
         if (!request.mpin().equals(request.confirmMpin())) {
-            throw new IllegalArgumentException("MPIN and confirm MPIN do not match.");
+            throw new IllegalArgumentException(
+                    "MPIN and confirm MPIN do not match.");
         }
 
-        // Proof (stored server-side) that the OTP step was passed and not used before.
+        // Verify that OTP was passed and reset session is still valid.
         MpinResetChallenge challenge = challenges
                 .findTopByCustomerIdAndVerifiedTrueAndConsumedFalseOrderByCreatedAtDesc(customerId)
                 .filter(c -> c.getExpiresAt().isAfter(Instant.now()))
@@ -164,15 +187,20 @@ public class MpinResetService {
                         "MPIN reset session has expired. Please start again."));
 
         CustomerRegistry customer = customers.findById(customerId)
-                .orElseThrow(() -> new IllegalArgumentException("Customer details could not be verified."));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer details could not be verified."));
 
         Long userId = customer.getUserId();
+
         if (userId == null) {
-            throw new IllegalArgumentException("Customer is not linked to a User Master record.");
+            throw new IllegalArgumentException(
+                    "Customer is not linked to a User Master record.");
         }
 
         List<String> currentHash = jdbc.queryForList(
-                "SELECT mpin_hash FROM public.\"MB001003\" WHERE user_id = ?", String.class, userId);
+                "SELECT mpin_hash FROM public.\"MB001003\" WHERE user_id = ?",
+                String.class,
+                userId);
 
         if (currentHash.isEmpty()) {
             throw new IllegalArgumentException(
@@ -180,28 +208,37 @@ public class MpinResetService {
         }
 
         if (encoder.matches(request.mpin(), currentHash.get(0))) {
-            throw new IllegalArgumentException("New MPIN must be different from your current MPIN.");
+            throw new IllegalArgumentException(
+                    "New MPIN must be different from your current MPIN.");
         }
 
-        // Also clears any failed-attempt lock, so the customer can log in right away.
+        // Update MPIN and clear failed-login lock.
         jdbc.update("""
                 UPDATE public."MB001003"
                 SET mpin_hash = ?,
                     pin_changed_at = now(),
                     failed_attempts = 0,
                     locked_until = NULL,
-                    status = CASE WHEN status = 'LOCKED' THEN 'ACTIVE' ELSE status END,
+                    status = CASE
+                        WHEN status = 'LOCKED' THEN 'ACTIVE'
+                        ELSE status
+                    END,
                     modified_by = ?,
                     modified_on = now()
                 WHERE user_id = ?
-                """, encoder.encode(request.mpin()), userId, userId);
+                """,
+                encoder.encode(request.mpin()),
+                userId,
+                userId);
 
         challenge.consume();
 
-        return new MessageResponse("MPIN changed successfully. Please login with your new MPIN.");
+        return new MessageResponse(
+                "MPIN changed successfully. Please login with your new MPIN.");
     }
 
     private String mask(String mobile) {
-        return "******" + mobile.substring(Math.max(0, mobile.length() - 4));
+        return "******" + mobile.substring(
+                Math.max(0, mobile.length() - 4));
     }
 }

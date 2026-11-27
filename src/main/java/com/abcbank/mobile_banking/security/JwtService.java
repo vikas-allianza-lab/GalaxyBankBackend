@@ -1,3 +1,4 @@
+
 package com.abcbank.mobile_banking.security;
 
 import java.nio.charset.StandardCharsets;
@@ -15,24 +16,39 @@ import io.jsonwebtoken.security.Keys;
 
 @Service
 public class JwtService {
+
     private final SecretKey key;
     private final long ttlSeconds;
     private final long accessTtlSeconds;
 
-    public JwtService(@Value("${app.security.jwt-secret}") String secret,
+    public JwtService(
+            @Value("${app.security.jwt-secret}") String secret,
             @Value("${app.security.registration-token-ttl-seconds:300}") long ttlSeconds,
             @Value("${app.security.access-token-ttl-seconds:900}") long accessTtlSeconds) {
-        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32)
-            throw new IllegalStateException("APP_JWT_SECRET must be at least 32 bytes");
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                    "APP_JWT_SECRET must be at least 32 bytes");
+        }
+
+        this.key = Keys.hmacShaKeyFor(
+                secret.getBytes(StandardCharsets.UTF_8));
+
         this.ttlSeconds = ttlSeconds;
         this.accessTtlSeconds = accessTtlSeconds;
     }
 
     public String createRegistrationToken(String customerId) {
         Instant now = Instant.now();
-        return Jwts.builder().subject(customerId).claim("user_type", "CU").claim("scope", "registration:complete")
-                .issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(ttlSeconds))).signWith(key).compact();
+
+        return Jwts.builder()
+                .subject(customerId)
+                .claim("user_type", "CU")
+                .claim("scope", "registration:complete")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(ttlSeconds)))
+                .signWith(key)
+                .compact();
     }
 
     public String createAccessToken(String customerId) {
@@ -44,45 +60,72 @@ public class JwtService {
                 .claim("scope", "fund:transfer")
                 .claim("token_use", "access")
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(900)))
+                .expiration(Date.from(now.plusSeconds(accessTtlSeconds)))
                 .signWith(key)
                 .compact();
     }
 
-    /** Login token (web or mobile). scope=access */
-    public String createAccessToken(String subject, String userType, String channel) {
+    public String createAccessToken(
+            String subject,
+            String userType,
+            String channel) {
+
         Instant now = Instant.now();
-        return Jwts.builder().subject(subject).claim("user_type", userType).claim("scope", "access")
+
+        return Jwts.builder()
+                .subject(subject)
+                .claim("user_type", userType)
+                .claim("scope", "access")
                 .claim("channel", channel)
-                .issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(accessTtlSeconds))).signWith(key)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(accessTtlSeconds)))
+                .signWith(key)
                 .compact();
     }
 
-    /** Mobile access token bound to a server-side refresh session. */
-    public String createAccessToken(String subject, String userType, String channel, String sessionId) {
+    public String createAccessToken(
+            String subject,
+            String userType,
+            String channel,
+            String sessionId) {
+
         Instant now = Instant.now();
-        return Jwts.builder().subject(subject).claim("user_type", userType)
-                .claim("scope", "access").claim("channel", channel)
+
+        return Jwts.builder()
+                .subject(subject)
+                .claim("user_type", userType)
+                .claim("scope", "access")
+                .claim("channel", channel)
                 .claim("sid", sessionId)
-                .issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(accessTtlSeconds)))
-                .signWith(key).compact();
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(accessTtlSeconds)))
+                .signWith(key)
+                .compact();
     }
 
-    /**
-     * Forgot-MPIN token, valid only for the "set new MPIN" call. scope=mpin:reset
-     */
     public String createMpinResetToken(String customerId, long ttl) {
         Instant now = Instant.now();
-        return Jwts.builder().subject(customerId).claim("user_type", "CU").claim("scope", "mpin:reset")
-                .issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(ttl))).signWith(key).compact();
+
+        return Jwts.builder()
+                .subject(customerId)
+                .claim("user_type", "CU")
+                .claim("scope", "mpin:reset")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(ttl)))
+                .signWith(key)
+                .compact();
+    }
+
+    public Claims parse(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public long getAccessTtlSeconds() {
         return accessTtlSeconds;
-    }
-
-    public Claims parse(String token) {
-        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     }
 
     public long getTtlSeconds() {

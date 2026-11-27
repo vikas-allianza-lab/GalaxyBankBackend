@@ -39,8 +39,10 @@ public class LoanLeadQueryService {
         response.put("customerNo", customerNo);
         response.put("productCodes", products);
         response.put("count", products.size());
-        response.put("message",
-                "Previously used loan product codes retrieved successfully");
+        response.put(
+                "message",
+                "Previously used loan product codes retrieved successfully"
+        );
 
         return response;
     }
@@ -76,15 +78,18 @@ public class LoanLeadQueryService {
         response.put("customerNo", customerNo);
         response.put("applications", applications);
         response.put("count", applications.size());
-        response.put("message",
-                "Loan applications retrieved successfully");
+        response.put(
+                "message",
+                "Loan applications retrieved successfully"
+        );
 
         return response;
     }
 
     // LON-09: GET LOAN APPLICATION BY ID
     public Map<String, Object> getLoanApplication(
-            String customerNo, Long id) {
+            String customerNo,
+            Long id) {
 
         try {
 
@@ -114,8 +119,10 @@ public class LoanLeadQueryService {
             Map<String, Object> response = new LinkedHashMap<>();
 
             response.put("application", application);
-            response.put("message",
-                    "Loan application retrieved successfully");
+            response.put(
+                    "message",
+                    "Loan application retrieved successfully"
+            );
 
             return response;
 
@@ -134,15 +141,25 @@ public class LoanLeadQueryService {
             String customerNo,
             LoanLeadRequest request) {
 
-        // 1. Validate customer number
+        // 1. Validate authenticated customer number
         if (customerNo == null || customerNo.isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "Customer login is required"
             );
         }
 
-        // 2. Get logged-in customer details
+        // 2. Validate request
+        if (request == null) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loan application details are required"
+            );
+        }
+
+        // 3. Fetch logged-in customer's details
         Map<String, Object> customer;
 
         try {
@@ -167,22 +184,40 @@ public class LoanLeadQueryService {
             );
         }
 
-        Long createdBy =
-                ((Number) customer.get("user_id")).longValue();
+        // 4. Get customer user ID
+        Object userId = customer.get("user_id");
 
+        if (!(userId instanceof Number)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Invalid customer user ID"
+            );
+        }
+
+        Long createdBy = ((Number) userId).longValue();
+
+        // 5. Get customer branch
         String customerBranch =
-                String.valueOf(customer.get("branch"));
+                customer.get("branch") == null
+                        ? ""
+                        : customer.get("branch").toString().trim();
 
-        // 3. Map existing customer branch to branch master code
+        // 6. Map customer branch to branch master code
         String branchCode;
 
         if ("PUNE001".equalsIgnoreCase(customerBranch)) {
+
             branchCode = "BR001";
+
         } else if ("BR001".equalsIgnoreCase(customerBranch)
                 || "BR002".equalsIgnoreCase(customerBranch)
                 || "BR003".equalsIgnoreCase(customerBranch)) {
+
             branchCode = customerBranch.toUpperCase();
+
         } else {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Customer branch has no configured branch master mapping: "
@@ -190,7 +225,7 @@ public class LoanLeadQueryService {
             );
         }
 
-        // 4. Validate branch foreign key
+        // 7. Validate branch foreign key
         Integer branchCount = jdbc.queryForObject("""
             SELECT COUNT(*)
             FROM public."MB002002"
@@ -201,18 +236,92 @@ public class LoanLeadQueryService {
         );
 
         if (branchCount == null || branchCount == 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Invalid branch code: " + branchCode
             );
         }
 
-        // 5. Validate loan product
+        // 8. Validate loan product type
+        if (request.productType() == null
+                || request.productType().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loan product type is required"
+            );
+        }
+
         String productCode = request.productType()
                 .trim()
                 .toUpperCase();
 
-        // 6. Insert fresh loan application
+        // 9. Validate loan amount
+        if (request.amount() == null
+                || request.amount().signum() <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loan amount must be greater than zero"
+            );
+        }
+
+        // 10. Validate loan tenure
+        if (request.tenureMonths() == null
+                || request.tenureMonths() < 1
+                || request.tenureMonths() > 360) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loan tenure must be between 1 and 360 months"
+            );
+        }
+
+        // 11. Validate loan purpose
+        if (request.purpose() == null
+                || request.purpose().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loan purpose is required"
+            );
+        }
+
+        String purpose = request.purpose().trim();
+
+        // 12. Validate total monthly income
+        if (request.totalIncome() == null
+                || request.totalIncome().signum() < 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Total monthly income cannot be negative"
+            );
+        }
+
+        // 13. Validate household expenses
+        if (request.householdExpense() == null
+                || request.householdExpense().signum() < 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Household expenses cannot be negative"
+            );
+        }
+
+        // 14. Validate security value when provided
+        if (request.securityValue() != null
+                && request.securityValue().signum() <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Security value must be greater than zero"
+            );
+        }
+
+        // 15. Insert fresh loan application
+        // Customer number, mobile and email are fetched from database.
         Map<String, Object> application = jdbc.queryForMap("""
             INSERT INTO public."MB004010" (
                 branch_code,
@@ -251,20 +360,22 @@ public class LoanLeadQueryService {
             productCode,
             request.amount(),
             request.tenureMonths(),
-            request.purpose().trim(),
+            purpose,
             request.securityValue(),
             request.totalIncome(),
             request.householdExpense(),
             createdBy
         );
 
-        // 7. Prepare response
+        // 16. Prepare response
         Map<String, Object> response = new LinkedHashMap<>();
 
         response.put("customerNo", customerNo);
         response.put("application", application);
-        response.put("message",
-                "Fresh loan application submitted successfully");
+        response.put(
+                "message",
+                "Fresh loan application submitted successfully"
+        );
 
         return response;
     }
@@ -310,8 +421,10 @@ public class LoanLeadQueryService {
         response.put("customerNo", customerNo);
         response.put("loanAccounts", loans);
         response.put("count", loans.size());
-        response.put("message",
-                "Existing loan accounts retrieved successfully");
+        response.put(
+                "message",
+                "Existing loan accounts retrieved successfully"
+        );
 
         return response;
     }
@@ -345,8 +458,10 @@ public class LoanLeadQueryService {
             Map<String, Object> response = new LinkedHashMap<>();
 
             response.put("loan", loan);
-            response.put("message",
-                    "Loan details retrieved successfully");
+            response.put(
+                    "message",
+                    "Loan details retrieved successfully"
+            );
 
             return response;
 
@@ -405,8 +520,10 @@ public class LoanLeadQueryService {
         response.put("loanAccountNo", loanAccountNo);
         response.put("emiPaymentRequests", requests);
         response.put("count", requests.size());
-        response.put("message",
-                "EMI payment request history retrieved successfully");
+        response.put(
+                "message",
+                "EMI payment request history retrieved successfully"
+        );
 
         return response;
     }
@@ -453,8 +570,10 @@ public class LoanLeadQueryService {
         response.put("customerNo", customerNo);
         response.put("loanAccounts", loans);
         response.put("count", loans.size());
-        response.put("message",
-                "Active loan accounts retrieved successfully");
+        response.put(
+                "message",
+                "Active loan accounts retrieved successfully"
+        );
 
         return response;
     }
@@ -469,13 +588,10 @@ public class LoanLeadQueryService {
                 branch_code,
                 account_type,
                 account_status
-
             FROM public."MB002003"
-
             WHERE customer_no = ?
               AND UPPER(account_type) IN ('SAVINGS', 'CURRENT')
               AND UPPER(account_status) = 'ACTIVE'
-
             ORDER BY account_type, account_no
             """, customerNo);
 
@@ -484,8 +600,10 @@ public class LoanLeadQueryService {
         response.put("customerNo", customerNo);
         response.put("debitAccounts", accounts);
         response.put("count", accounts.size());
-        response.put("message",
-                "Active debit accounts retrieved successfully");
+        response.put(
+                "message",
+                "Active debit accounts retrieved successfully"
+        );
 
         return response;
     }

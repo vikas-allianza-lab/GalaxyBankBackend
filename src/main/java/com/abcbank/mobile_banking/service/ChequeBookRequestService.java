@@ -26,21 +26,20 @@ public class ChequeBookRequestService {
             String customerId,
             ChequeBookRequest request) {
 
-        // 1. Validate customer authentication
+        // 1. Validate authenticated customer
         if (customerId == null || customerId.isBlank()) {
             throw new IllegalArgumentException(
                     "Invalid customer authentication."
             );
         }
 
-        // 2. Validate request
+        String normalizedCustomerId = customerId.trim();
+
         if (request == null) {
             throw new IllegalArgumentException(
                     "Cheque book request cannot be empty."
             );
         }
-
-        String normalizedCustomerId = customerId.trim();
 
         if (request.accountNo() == null
                 || request.accountNo().isBlank()) {
@@ -49,7 +48,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 3. Validate logged-in customer
+        // 2. Get active customer user ID from User Master
         Long createdBy;
 
         try {
@@ -57,11 +56,11 @@ public class ChequeBookRequestService {
                 SELECT user_id
                 FROM public."MB001001"
                 WHERE customer_no = ?
-                  AND user_role = 'CU'
+                  AND user_type = 'CU'
                   AND status = 'ACTIVE'
                 """,
-                Long.class,
-                normalizedCustomerId
+                    Long.class,
+                    normalizedCustomerId
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -70,23 +69,22 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 4. Validate account ownership
+        // 3. Verify account belongs to authenticated customer
         Map<String, Object> account;
 
         try {
             account = jdbc.queryForMap("""
-                SELECT
-                    account_no,
-                    customer_no,
-                    account_status,
-                    account_type,
-                    branch_code
+                SELECT account_no,
+                       customer_no,
+                       account_status,
+                       account_type,
+                       branch_code
                 FROM public."MB002003"
                 WHERE account_no = ?
                   AND customer_no = ?
                 """,
-                request.accountNo().trim(),
-                normalizedCustomerId
+                    request.accountNo().trim(),
+                    normalizedCustomerId
             );
 
         } catch (EmptyResultDataAccessException ex) {
@@ -95,7 +93,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 5. Validate account status
+        // 4. Check account status
         String accountStatus =
                 String.valueOf(account.get("account_status"));
 
@@ -105,7 +103,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 6. Validate cheque book type
+        // 5. Validate cheque book type
         if (request.bookType() == null
                 || request.bookType().isBlank()) {
             throw new IllegalArgumentException(
@@ -113,9 +111,8 @@ public class ChequeBookRequestService {
             );
         }
 
-        String bookType = request.bookType()
-                .trim()
-                .toUpperCase(Locale.ROOT);
+        String bookType =
+                request.bookType().trim().toUpperCase(Locale.ROOT);
 
         int noOfLeaves;
 
@@ -131,7 +128,7 @@ public class ChequeBookRequestService {
             );
         }
 
-        // 7. Validate delivery option
+        // 6. Validate delivery option
         if (request.delivery() == null
                 || request.delivery().isBlank()) {
             throw new IllegalArgumentException(
@@ -139,11 +136,20 @@ public class ChequeBookRequestService {
             );
         }
 
-        String delivery = request.delivery()
-                .trim()
-                .toUpperCase(Locale.ROOT);
+        String delivery =
+                request.delivery().trim().toUpperCase(Locale.ROOT);
 
-        // 8. Insert cheque book request
+        if (!delivery.equals("BRANCH")
+                && !delivery.equals("PRIMARY_ADDRESS")
+                && !delivery.equals("DEFAULT_ADDRESS")) {
+
+            throw new IllegalArgumentException(
+                    "Delivery must be BRANCH, PRIMARY_ADDRESS "
+                            + "or DEFAULT_ADDRESS."
+            );
+        }
+
+        // 7. Insert cheque book request
         return jdbc.queryForObject("""
             INSERT INTO public."MB004002" (
                 branch_code,
@@ -166,28 +172,28 @@ public class ChequeBookRequestService {
                 created_on
             """,
 
-            (rs, rowNum) -> new ChequeBookResponse(
-                    rs.getLong("id"),
-                    rs.getString("req_status"),
-                    rs.getString("account_no"),
-                    rs.getInt("no_of_leaves"),
-                    rs.getString("delivery"),
-                    rs.getObject(
-                            "created_on",
-                            OffsetDateTime.class
-                    ),
-                    "Cheque book request submitted successfully."
-            ),
+                (rs, rowNum) -> new ChequeBookResponse(
+                        rs.getLong("id"),
+                        rs.getString("req_status"),
+                        rs.getString("account_no"),
+                        rs.getInt("no_of_leaves"),
+                        rs.getString("delivery"),
+                        rs.getObject(
+                                "created_on",
+                                OffsetDateTime.class
+                        ),
+                        "Cheque book request submitted successfully."
+                ),
 
-            account.get("branch_code"),
-            normalizedCustomerId,
-            account.get("account_no"),
-            account.get("account_status"),
-            account.get("account_type"),
-            bookType,
-            noOfLeaves,
-            delivery,
-            createdBy
+                account.get("branch_code"),
+                normalizedCustomerId,
+                account.get("account_no"),
+                account.get("account_status"),
+                account.get("account_type"),
+                bookType,
+                noOfLeaves,
+                delivery,
+                createdBy
         );
     }
 }

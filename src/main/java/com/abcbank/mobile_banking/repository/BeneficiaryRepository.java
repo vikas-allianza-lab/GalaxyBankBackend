@@ -16,8 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.abcbank.mobile_banking.dto.response.BeneficiaryResponse;
 
-
-
 @Repository
 public class BeneficiaryRepository {
 
@@ -49,6 +47,34 @@ public class BeneficiaryRepository {
         }
 
         return rows.get(0);
+    }
+
+    // Get customer's registered email address
+    // This email will receive beneficiary verification OTP.
+    public String findCustomerRegisteredEmail(String customerNo) {
+
+        List<String> emails = jdbc.query("""
+            SELECT email
+            FROM public."MB001001"
+            WHERE customer_no = ?
+              AND user_type = 'CU'
+              AND status = 'ACTIVE'
+              AND email IS NOT NULL
+              AND TRIM(email) <> ''
+            ORDER BY user_id DESC
+            LIMIT 1
+            """,
+            (rs, rowNum) -> rs.getString("email"),
+            customerNo
+        );
+
+        if (emails.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Customer registered email address not found");
+        }
+
+        return emails.get(0);
     }
 
     // Map database columns to response
@@ -311,7 +337,7 @@ public class BeneficiaryRepository {
             boolean verified) {
     }
 
-
+    // Update beneficiary details
     public int updateBeneficiaryDetails(
             Long beneficiaryId,
             String customerNo,
@@ -332,7 +358,4 @@ public class BeneficiaryRepository {
                 beneficiaryId,
                 customerNo);
     }
-
-    
-
 }

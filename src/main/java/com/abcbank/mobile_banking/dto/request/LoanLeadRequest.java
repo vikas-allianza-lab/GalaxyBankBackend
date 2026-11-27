@@ -13,10 +13,9 @@ import jakarta.validation.constraints.Size;
 
 public record LoanLeadRequest(
 
-    // Customer number
-    @NotBlank
-    @Size(max = 30)
-    String customerNo,
+   // Customer number is obtained from JWT authentication
+@Size(max = 30)
+String customerNo,
 
     // Loan product type
     @NotBlank

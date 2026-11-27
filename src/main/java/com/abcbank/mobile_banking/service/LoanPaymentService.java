@@ -215,7 +215,7 @@ public class LoanPaymentService {
 
         LocalTime currentTime = LocalTime.now(BANK_ZONE);
 
-        if (!currentTime.isBefore(LocalTime.of(17, 0))) {
+        if (!currentTime.isBefore(LocalTime.of(19, 0))) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

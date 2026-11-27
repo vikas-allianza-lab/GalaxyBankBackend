@@ -36,17 +36,27 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 
-security:
-  jwt:
-    secret: ${APP_JWT_SECRET}
 
+  security:
+    jwt-secret: ${APP_JWT_SECRET}
+    registration-token-ttl-seconds: ${REGISTRATION_TOKEN_TTL_SECONDS:300}
+    access-token-ttl-seconds: ${ACCESS_TOKEN_TTL_SECONDS:900}
 app:
   security:
     jwt-secret: ${APP_JWT_SECRET}
     registration-token-ttl-seconds: ${REGISTRATION_TOKEN_TTL_SECONDS:300}
+    access-token-ttl-seconds: ${ACCESS_TOKEN_TTL_SECONDS:900}
 
   registration:
     otp-bypass-enabled: ${OTP_BYPASS_ENABLED:false}
+
+  otp:
+    # CONSOLE = local SMS simulation; MSG91 = real SMS delivery.
+    delivery-mode: ${OTP_DELIVERY_MODE:CONSOLE}
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY:}
+      template-id: ${MSG91_TEMPLATE_ID:}
+      otp-variable: ${MSG91_OTP_VARIABLE:VAR1}
 
   kyc:
     storage-location: uploads/kyc
