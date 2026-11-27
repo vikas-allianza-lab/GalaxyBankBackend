@@ -3,6 +3,7 @@ package com.abcbank.mobile_banking.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -79,6 +80,18 @@ public class SecurityConfig {
                                 "/api/v1/customer-360",
                                 "/api/v1/accounts/**"
                         ).hasRole("CUSTOMER")
+
+
+
+                        // PUBLIC THEME GET API - NO BEARER TOKEN
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/themes"
+                        ).permitAll()
+
+                        // Other theme endpoints remain protected
+                        .requestMatchers("/api/v1/themes/**")
+                        .hasRole("CUSTOMER")
 
                         // All other APIs require authentication
                         .anyRequest().authenticated()
